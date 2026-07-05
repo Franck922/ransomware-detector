@@ -1,0 +1,47 @@
+# ── Python ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Environnement virtuel
+venv/
+.venv/
+env/
+
+# Variables d'environnement (clés API, mots de passe)
+.env
+.env.*
+
+# ── Modèles ML entraînés (fichiers lourds) ──────────
+detector/models/*.pkl
+detector/models/*.pt
+detector/models/*.pth
+
+# ── Données brutes (trop lourdes pour Git) ──────────
+data/raw/*
+data/processed/*
+# On garde les dossiers mais pas leur contenu
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/synthetic/.gitkeep
+
+# ── Logs locaux ─────────────────────────────────────
+*.log
+logs/
+
+# ── OS ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── VS Code ─────────────────────────────────────────
+.vscode/
+*.code-workspace
+
+# ── Jupyter (si utilisé pour expérimentation) ───────
+.ipynb_checkpoints/
+*.ipynb
