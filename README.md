@@ -284,4 +284,4 @@ ransomware-detector/
 
 ## 📄 Licence
 
-Projet académique — ECE Paris 2026. Usage strictement pédagogique.
+Projet de substitution de stage ECE Paris 2026. Usage strictement pédagogique.
