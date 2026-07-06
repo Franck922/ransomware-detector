@@ -1,9 +1,9 @@
-# 🔐 Ransomware Detector — MVP EDR Académique
+# 🔐 Ransomware Detector: MVP EDR Académique
 
 Système de détection et réponse précoce aux ransomwares par analyse comportementale
 des signaux système (logs Sysmon, activité fichiers, appels processus).
 
-**ECE Paris — Bachelor 3 Réseaux & Cybersécurité — Promotion 2026**
+**ECE Paris Bachelor 3 Réseaux & Cybersécurité Promotion 2026**
 
 ---
 
