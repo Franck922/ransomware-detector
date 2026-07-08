@@ -1,6 +1,5 @@
-on doit respecter une marche à quivre bien precise.
-Phase 1 — Mise en place de l'environnement
-5–11 juillet
+On doit respecter une marche à quivre bien precise.
+Phase 1 — Mise en place de l'environnement 5–11 juillet
 Tous
 Créer le repository GitHub commun avec une structure de dossiers claire (parser/, model/, api/, dashboard/, docs/)
 Tous
@@ -50,8 +49,7 @@ Tous
 Livrable : Moteur de règles calibré · Jeu de données synthétiques labellisées · Premier rapport de métriques
 
 
-Phase 4 — Modèles ML : Random Forest puis LSTM
-27 juillet – 4 août
+Phase 4 — Modèles ML : Random Forest puis LSTM 27 juillet – 4 août
 M2 principal
 M1 support
 Préparer le dataset d'entraînement : combiner logs normaux (baseline) + logs malveillants (synthétiques + Stratosphere IPS)
@@ -66,8 +64,7 @@ Comparer les métriques RF vs LSTM sur le même jeu de test — rédiger le tabl
 
 Livrable : Modèles RF et LSTM entraînés et sauvegardés · Tableau comparatif des métriques · Choix justifié du modèle retenu
 5
-Phase 5 — API complète & Response Engine
-5–10 août
+Phase 5 — API complète & Response Engine 5–10 août
 M3 principal
 M2 support
 Développer tous les endpoints FastAPI : /ingest, /analyze, /status, /alerts, /response/kill/{pid}, /response/isolate
@@ -82,8 +79,7 @@ Tester le pipeline complet end-to-end : VM → Winlogbeat → /ingest → détec
 
 Livrable : API FastAPI complète avec Swagger · Response Engine testé sur VM · Pipeline E2E fonctionnel
 6
-Phase 6 — Dashboard, Docker & intégration finale
-11–16 août
+Phase 6 — Dashboard, Docker & intégration finale 11–16 août
 M3 principal
 Tous
 Développer le dashboard web (HTML/JS/Chart.js) : jauge de risque, timeline des événements, liste des alertes, journal de réponse
@@ -96,8 +92,7 @@ Tests d'intégration complets : vérifier que docker-compose up démarre tout en
 Tous
 Livrable : Dashboard opérationnel · docker-compose.yml fonctionnel · Tests d'intégration validés
 
-Phase 7 — Documentation, rapport & répétition
-17–20 août
+Phase 7 — Documentation, rapport & répétition 17–20 août
 Tous
 Rédiger la documentation technique complète : architecture, guide d'installation du lab, guide API, guide utilisateur dashboard
 Tous
@@ -105,7 +100,6 @@ Rédiger le rapport académique final : contexte, choix techniques justifiés, r
 Tous
 Répéter la démonstration live 2 fois : exécution ransomware → détection → réponse automatique visible dans le dashboard
 Tous
-Livrable : Documentation complète · Rapport final · Démo répétée et validée
-16:29
+Livrable : Documentation complète · Rapport final · Démo répétée et validée.
 
 
