@@ -1,0 +1,111 @@
+on doit respecter une marche à quivre bien precise.
+Phase 1 — Mise en place de l'environnement
+5–11 juillet
+Tous
+Créer le repository GitHub commun avec une structure de dossiers claire (parser/, model/, api/, dashboard/, docs/)
+Tous
+Rédiger le README.md initial avec l'architecture, les conventions de code et les formats JSON d'interface entre modules
+Tous
+Installer et configurer Sysmon sur la VM Windows (config XML officielle de SwiftOnSecurity)
+M1
+Installer et tester Winlogbeat sur la VM Windows — vérifier que les événements Sysmon remontent bien en JSON
+M1
+Configurer l'environnement Python (venv, requirements.txt avec toutes les dépendances)
+Tous
+Prendre un snapshot de la VM Windows propre avant toute exécution de ransomware
+Tous
+Livrable : Repository GitHub structuré · VM Windows prête avec Sysmon + Winlogbeat · README d'architecture
+
+Phase 2 — Pipeline de données & Baseline 12–19 juillet
+M1 principal
+M2 support
+Développer le parser Sysmon : lire les événements JSON de Winlogbeat, normaliser en dictionnaires Python horodatés
+M1
+Filtrer les EventIDs pertinents (1, 3, 11, 23) et ignorer le reste pour réduire le bruit
+M1
+Développer l'endpoint POST /ingest sur FastAPI pour recevoir les lots d'événements de l'agent
+M3
+Développer le Baseline Engine : observer 15 min d'activité normale et calculer moyenne + écart-type de chaque feature
+M1
+Développer le Feature Extractor : agréger les événements par fenêtres de 10s et 30s, calculer les 12 features définies
+M1
+Écrire les tests unitaires pour le parser et le feature extractor avec des logs Sysmon synthétiques
+M1
+Livrable : Parser fonctionnel · Baseline Engine · Feature Extractor · endpoint /ingest opérationnel
+
+Phase 3  Moteur de règles & premiers tests
+20–26 juillet
+M2 principal
+M1 support
+Implémenter le moteur de règles adaptatives avec les 4 règles de scoring calibrées sur le baseline
+M2
+Générer des logs Sysmon synthétiques en VM (simuler manuellement renommages / suppressions massifs)
+M1
+Tester le moteur de règles sur les données synthétiques — valider que l'alerte se déclenche sur les bons scénarios
+M2
+Affiner les seuils du moteur de règles pour minimiser les faux positifs sur données normales
+M2
+Documenter les résultats : taux de détection, faux positifs, features les plus déclenchantes
+Tous
+Livrable : Moteur de règles calibré · Jeu de données synthétiques labellisées · Premier rapport de métriques
+
+
+Phase 4 — Modèles ML : Random Forest puis LSTM
+27 juillet – 4 août
+M2 principal
+M1 support
+Préparer le dataset d'entraînement : combiner logs normaux (baseline) + logs malveillants (synthétiques + Stratosphere IPS)
+M1
+Entraîner le Random Forest (scikit-learn) : split 80/20, cross-validation 5-fold, calculer F1-Score, AUC-ROC, matrice de confusion
+M2
+Analyser la feature importance du Random Forest — identifier les 3 features les plus discriminantes
+M2
+Implémenter le modèle LSTM (PyTorch) : architecture 2 couches LSTM + Dense + Sigmoid, entraîner avec Adam + BCELoss
+M2
+Comparer les métriques RF vs LSTM sur le même jeu de test — rédiger le tableau comparatif
+
+Livrable : Modèles RF et LSTM entraînés et sauvegardés · Tableau comparatif des métriques · Choix justifié du modèle retenu
+5
+Phase 5 — API complète & Response Engine
+5–10 août
+M3 principal
+M2 support
+Développer tous les endpoints FastAPI : /ingest, /analyze, /status, /alerts, /response/kill/{pid}, /response/isolate
+M3
+Intégrer le moteur de détection retenu (règles + modèle) dans le pipeline de l'API
+M3
+Développer le Response Engine : envoyer la commande Stop-Process à l'agent PowerShell sur la VM
+M3
+Développer l'isolation réseau : envoyer la commande netsh advfirewall à l'agent sur la VM
+M3
+Tester le pipeline complet end-to-end : VM → Winlogbeat → /ingest → détection → réponse automatique
+
+Livrable : API FastAPI complète avec Swagger · Response Engine testé sur VM · Pipeline E2E fonctionnel
+6
+Phase 6 — Dashboard, Docker & intégration finale
+11–16 août
+M3 principal
+Tous
+Développer le dashboard web (HTML/JS/Chart.js) : jauge de risque, timeline des événements, liste des alertes, journal de réponse
+M3
+Implémenter le rafraîchissement automatique du dashboard (polling API toutes les 2 secondes)
+M3
+Écrire le Dockerfile et le docker-compose.yml pour la partie serveur (API + dashboard)
+M3
+Tests d'intégration complets : vérifier que docker-compose up démarre tout en une commande
+Tous
+Livrable : Dashboard opérationnel · docker-compose.yml fonctionnel · Tests d'intégration validés
+
+Phase 7 — Documentation, rapport & répétition
+17–20 août
+Tous
+Rédiger la documentation technique complète : architecture, guide d'installation du lab, guide API, guide utilisateur dashboard
+Tous
+Rédiger le rapport académique final : contexte, choix techniques justifiés, résultats, analyse, perspectives
+Tous
+Répéter la démonstration live 2 fois : exécution ransomware → détection → réponse automatique visible dans le dashboard
+Tous
+Livrable : Documentation complète · Rapport final · Démo répétée et validée
+16:29
+
+
