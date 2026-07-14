@@ -11,9 +11,15 @@ class BaselineEngine:
     la moyenne et l'écart-type pour évaluer les déviations futures.
     """
     
-    def __init__(self):
+    def __init__(self, min_vectors: int = 90):
+        """
+        Args:
+            min_vectors: Nombre minimum de vecteurs à collecter avant de calculer la baseline.
+                         Par défaut 90 fenêtres de 10s = 15 minutes d'observation.
+        """
         # Stocke l'historique des features pendant la phase d'apprentissage
         self.history: List[Dict[str, float]] = []
+        self.min_vectors = min_vectors
         
         # Moyennes (mu) et écarts-types (sigma) calculés
         self.means: Dict[str, float] = {}
@@ -22,9 +28,17 @@ class BaselineEngine:
         self.is_trained = False
 
     def add_vector(self, features: Dict[str, float]):
-        """Ajoute un vecteur de features à l'historique (pendant l'apprentissage)"""
+        """
+        Ajoute un vecteur de features à l'historique (pendant l'apprentissage).
+        Déclenche automatiquement le calcul de la baseline quand assez de données sont collectées.
+        """
         if not self.is_trained:
             self.history.append(features)
+            logger.info(f"📊 Baseline : apprentissage en cours ({len(self.history)}/{self.min_vectors} vecteurs)")
+            
+            if len(self.history) >= self.min_vectors:
+                self.compute_baseline()
+                logger.info("✅ Baseline calculée ! Le système passe en mode DÉTECTION.")
 
     def compute_baseline(self):
         """
