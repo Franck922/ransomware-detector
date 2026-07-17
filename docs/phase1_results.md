@@ -164,4 +164,4 @@ Ce format JSON structuré est le point d'entrée de tout notre pipeline d'analys
 
 L'environnement de laboratoire est entièrement opérationnel. La VM Windows avec
 Sysmon et Winlogbeat fournit un flux continu de données système au format JSON,
-prêt à être consommé par le pipeline d'analyse développé en Phase 2.
+prêt à être consommé par le pipeline d'analyse développé en Phase 2. 
