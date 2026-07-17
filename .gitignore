@@ -44,4 +44,5 @@ desktop.ini
 
 # ── Jupyter (si utilisé pour expérimentation) ───────
 .ipynb_checkpoints/
-*.ipynb
+*.ipynbmodels/*.pkl
+models/*.pth
