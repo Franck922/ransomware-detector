@@ -41,7 +41,7 @@ parser = SysmonParser()
 extractor_10s = FeatureExtractor(window_seconds=10)
 extractor_30s = FeatureExtractor(window_seconds=30)
 baseline_engine = BaselineEngine(min_vectors=10)  # 10 pour les tests, 90 en production (15 min)
-rules_engine = RulesEngine()
+rules_engine = RulesEngine(alert_threshold=0.70)
 
 @app.get("/")
 def read_root():
@@ -126,12 +126,15 @@ def ingest_logs(payload: IngestPayload):
                     
                     # Analyse par le modèle Machine Learning (Random Forest)
                     if ML_ENABLED:
-                        df_features = pd.DataFrame([features_10s])
                         try:
-                            # Standardiser les features
+                            # Convertir toutes les 12 features en DataFrame
+                            df_features = pd.DataFrame([features_10s])
+                            # Standardiser les features (retourne un array NumPy)
                             X_scaled = scaler.transform(df_features)
+                            # Reconstruire le DataFrame avec les noms de colonnes originaux pour éliminer le warning sklearn
+                            X_scaled_df = pd.DataFrame(X_scaled, columns=df_features.columns)
                             # Prédire (0 = Normal, 1 = Ransomware)
-                            prediction = rf_model.predict(X_scaled)[0]
+                            prediction = rf_model.predict(X_scaled_df)[0]
                             if prediction == 1:
                                 is_alert = True
                                 detection_source = "RandomForest"
@@ -139,18 +142,63 @@ def ingest_logs(payload: IngestPayload):
                             logger.error(f"Erreur ML prédiction: {e}")
                     
                     if is_alert:
-                        logger.error(f"🚨🚨🚨 ALERTE CRITIQUE : Ransomware Détecté par {detection_source} ! 🚨🚨🚨")
-                        alert_data = {
-                            "timestamp": "now",
-                            "source": detection_source,
-                            "features": features_10s
-                        }
-                        alert_history.append(alert_data)
+                        top_suspect = features_10s.get("top_suspect")
                         
-                        # --- DÉCLENCHEMENT DU RESPONSE ENGINE ---
-                        pending_commands.append({"action": "KILL", "target": "ALL_SUSPICIOUS"})
-                        logger.warning("🔨 Commande KILL ajoutée à la file d'attente de l'Agent PowerShell.")
-                        
+                        if top_suspect:
+                            score = top_suspect.get("score", 0)
+                            
+                            # Generation des raisons dynamiques
+                            reasons = []
+                            stats = top_suspect.get("stats", {})
+                            if stats.get("files_created", 0) > 0: reasons.append(f"{stats['files_created']} file creations")
+                            if stats.get("files_deleted", 0) > 0: reasons.append(f"{stats['files_deleted']} file deletions")
+                            if stats.get("entropy", 0) > 5.0: reasons.append(f"High entropy ({stats['entropy']})")
+                            if stats.get("network_connections", 0) > 0: reasons.append(f"Network activity ({stats['network_connections']} connections)")
+                            if stats.get("processes_created", 0) > 0: reasons.append(f"Child process detected ({stats['processes_created']})")
+
+                            payload = {
+                                "action": "KILL",
+                                "pid": top_suspect.get("pid"),
+                                "process": top_suspect.get("process_name"),
+                                "parent": top_suspect.get("parent_name", "unknown"),
+                                "parent_pid": top_suspect.get("parent_pid"),
+                                "score": score,
+                                "confidence": "HIGH" if score >= 80 else ("MEDIUM" if score >= 50 else "LOW"),
+                                "stats": stats,
+                                "reasons": reasons
+                            }
+
+                            if score >= 80:
+                                logger.error(f"🚨🚨🚨 ALERTE CRITIQUE : Ransomware Détecté (Score: {score}) par {detection_source} ! 🚨🚨🚨")
+                                pending_commands.append(payload)
+                                logger.warning(f"🔨 Commande KILL pour PID {top_suspect.get('pid')} ajoutée à la file d'attente.")
+                                
+                                # Historisation de l'incident pour le Dashboard SOC (Phase 6)
+                                import os
+                                from datetime import datetime
+                                os.makedirs("reports", exist_ok=True)
+                                timestamp_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+                                report_filename = f"reports/{timestamp_str}_{top_suspect.get('process_name', 'unknown')}.json"
+                                try:
+                                    with open(report_filename, "w") as f:
+                                        json.dump(payload, f, indent=4)
+                                    logger.info(f"📄 Rapport d'incident sauvegardé : {report_filename}")
+                                except Exception as e:
+                                    logger.error(f"Erreur lors de la sauvegarde du rapport : {e}")
+
+                            elif score >= 50:
+                                logger.warning(f"⚠️ Alerte Modérée (Score: {score}) pour PID {top_suspect.get('pid')}. Journalisation uniquement.")
+                            else:
+                                logger.info(f"ℹ️ Comportement suspect mineur (Score: {score}). Aucune action requise.")
+                                
+                            alert_data = {
+                                "timestamp": "now",
+                                "source": detection_source,
+                                "payload": payload
+                            }
+                            alert_history.append(alert_data)
+                        else:
+                            logger.error(f"🚨 ALERTE par {detection_source} mais aucun processus suspect identifié.")
                     else:
                         logger.info(f"✅ [Normal] Aucune menace détectée.")
                     
@@ -213,6 +261,34 @@ def get_status():
         "ml_enabled": ML_ENABLED,
         "baseline_trained": baseline_engine.is_trained,
         "pending_commands_count": len(pending_commands)
+    }
+
+@app.post("/analyze")
+def analyze_features(features: dict):
+    """
+    Endpoint manuel pour analyser un vecteur de features ponctuel (sans passer par le flux Winlogbeat)
+    """
+    # 1. Règles Heuristiques
+    analysis_result = rules_engine.evaluate(features, {})
+    is_alert = analysis_result["alert"]
+    detection_source = "RulesEngine"
+    
+    # 2. Modèle ML
+    if ML_ENABLED:
+        try:
+            df_features = pd.DataFrame([features])
+            X_scaled = scaler.transform(df_features)
+            prediction = rf_model.predict(X_scaled)[0]
+            if prediction == 1:
+                is_alert = True
+                detection_source = "RandomForest"
+        except Exception as e:
+            logger.error(f"Erreur /analyze ML: {e}")
+            
+    return {
+        "alert": is_alert,
+        "source": detection_source if is_alert else "None",
+        "rules_details": analysis_result
     }
 
 @app.get("/alerts")

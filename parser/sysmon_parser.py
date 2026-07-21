@@ -62,6 +62,7 @@ class SysmonParser:
             "process_id": None,
             "process_path": None,
             "parent_process": None,
+            "parent_process_id": None,
             "target_file": None,
             "action": None,
             "network_ip": None,
@@ -85,6 +86,13 @@ class SysmonParser:
         parent_path = event_data.get("ParentImage")
         if parent_path:
             normalized["parent_process"] = parent_path.split("\\")[-1] if "\\" in parent_path else parent_path
+            
+        parent_pid = event_data.get("ParentProcessId")
+        if parent_pid:
+            try:
+                normalized["parent_process_id"] = int(parent_pid)
+            except ValueError:
+                pass
 
         # Event-specific extraction
         if event_id == 1:

@@ -85,20 +85,33 @@ def process_stratosphere_malware(filepaths):
         )
         resampled = resampled[resampled['nb_connections'] > 0].copy()
         
-        # Synthétiser les comportements d'un ransomware en action
-        resampled['nb_files_created'] = np.random.randint(50, 200, size=len(resampled))
-        resampled['nb_files_deleted'] = np.random.randint(0, 50, size=len(resampled))
-        resampled['nb_files_renamed'] = np.random.randint(10, 100, size=len(resampled))
-        resampled['nb_unique_extensions'] = np.random.randint(5, 15, size=len(resampled))
-        resampled['entropy_filenames'] = np.random.uniform(5.0, 7.5, size=len(resampled))
-        resampled['nb_processes_created'] = np.random.randint(5, 20, size=len(resampled))
-        resampled['nb_child_processes'] = np.random.randint(2, 10, size=len(resampled))
-        resampled['process_depth'] = np.random.randint(3, 6, size=len(resampled))
-        resampled['nb_external_connections'] = resampled['nb_connections']
-        resampled['nb_dns_queries'] = np.random.randint(0, 10, size=len(resampled))
-        resampled['label'] = 1
-        
-        frames.append(resampled.reset_index(drop=True))
+        # PROFIL A (Complet : Réseau + Processus + Fichiers)
+        profile_A = resampled.copy()
+        profile_A['nb_files_created'] = np.random.randint(50, 200, size=len(profile_A))
+        profile_A['nb_files_deleted'] = np.random.randint(10, 50, size=len(profile_A))
+        profile_A['nb_files_renamed'] = np.random.randint(10, 100, size=len(profile_A))
+        profile_A['nb_unique_extensions'] = np.random.randint(5, 15, size=len(profile_A))
+        profile_A['entropy_filenames'] = np.random.uniform(5.0, 7.5, size=len(profile_A))
+        profile_A['nb_processes_created'] = np.random.randint(5, 20, size=len(profile_A))
+        profile_A['nb_child_processes'] = np.random.randint(2, 10, size=len(profile_A))
+        profile_A['process_depth'] = np.random.randint(3, 6, size=len(profile_A))
+        profile_A['nb_external_connections'] = profile_A['nb_connections']
+        profile_A['nb_dns_queries'] = np.random.randint(0, 10, size=len(profile_A))
+        profile_A['label'] = 1
+        frames.append(profile_A.reset_index(drop=True))
+
+        # PROFIL B (Furtif Offline : Fichiers sans réseau)
+        profile_B = profile_A.copy()
+        profile_B['nb_connections'] = 0
+        profile_B['nb_unique_ips'] = 0
+        profile_B['nb_external_connections'] = 0
+        profile_B['nb_dns_queries'] = 0
+        frames.append(profile_B.reset_index(drop=True))
+
+        # PROFIL C (Sans suppression : Fichiers chiffrés mais pas supprimés, pour coller à Sysmon)
+        profile_C = profile_A.copy()
+        profile_C['nb_files_deleted'] = 0
+        frames.append(profile_C.reset_index(drop=True))
         
     return pd.concat(frames, ignore_index=True)
 

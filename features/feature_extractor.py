@@ -8,6 +8,7 @@ class FeatureExtractor:
     """
     Agrège les événements normalisés sur une fenêtre de temps 
     et calcule les 12 features comportementales.
+    Trace également la causalité par processus pour cibler la réponse.
     """
     
     def __init__(self, window_seconds: int = 10):
@@ -16,17 +17,11 @@ class FeatureExtractor:
         self.window_start: datetime = None
 
     def add_event(self, event: Dict[str, Any]) -> bool:
-        """
-        Ajoute un événement au buffer. 
-        Retourne True si la fenêtre est pleine (doit être extraite), False sinon.
-        """
         evt_time_str = event.get("timestamp")
         if not evt_time_str:
             return False
             
-        # Parse timestamp (Winlogbeat format: 2026-07-06T14:06:09.012Z)
         try:
-            # Handle standard ISO format parsing (stripping Z)
             evt_time = datetime.fromisoformat(evt_time_str.replace("Z", "+00:00"))
         except ValueError:
             return False
@@ -37,15 +32,12 @@ class FeatureExtractor:
         delta = (evt_time - self.window_start).total_seconds()
 
         if delta >= self.window_seconds:
-            return True # Window is full, caller should extract features and reset
+            return True
 
         self.events_buffer.append(event)
         return False
 
     def extract_features(self) -> Dict[str, Any]:
-        """
-        Calcule et retourne les 12 features pour la fenêtre temporelle actuelle.
-        """
         features = {
             "nb_files_created": 0,
             "nb_files_deleted": 0,
@@ -58,7 +50,7 @@ class FeatureExtractor:
             "nb_connections": 0,
             "nb_unique_ips": 0,
             "nb_external_connections": 0,
-            "nb_dns_queries": 0 # Sysmon Event 22 non collecté par défaut, reste à 0
+            "nb_dns_queries": 0
         }
 
         if not self.events_buffer:
@@ -68,37 +60,77 @@ class FeatureExtractor:
         filenames = []
         ips = set()
         
+        # Tracking par processus (PID)
+        process_tracker = {}
+
         for event in self.events_buffer:
             action = event.get("action")
+            pid = event.get("process_id")
+            pname = event.get("process_name", "unknown.exe")
+            parent = event.get("parent_process", "unknown.exe")
+            parent_pid = event.get("parent_process_id")
+            
+            # Initialisation du tracker pour ce PID
+            if pid and pid not in process_tracker:
+                process_tracker[pid] = {
+                    "pid": pid,
+                    "process_name": pname,
+                    "parent_name": parent,
+                    "parent_pid": parent_pid,
+                    "score": 0,
+                    "stats": {
+                        "files_created": 0,
+                        "files_deleted": 0,
+                        "network_connections": 0,
+                        "processes_created": 0,
+                        "filenames": []
+                    }
+                }
             
             # --- FILE ACTIVITY (11, 23) ---
             if action == "file_create":
                 features["nb_files_created"] += 1
+                if pid: 
+                    process_tracker[pid]["score"] += 1
+                    process_tracker[pid]["stats"]["files_created"] += 1
+                
                 target = event.get("target_file")
                 if target:
                     name = os.path.basename(target)
                     filenames.append(name)
+                    if pid: process_tracker[pid]["stats"]["filenames"].append(name)
                     ext = os.path.splitext(name)[1].lower()
                     if ext: extensions.add(ext)
                     
             elif action == "file_delete":
                 features["nb_files_deleted"] += 1
-                
-            # Note: Renamed files (Sysmon Event 2) are not in our filter, 
-            # so we keep it at 0 for this MVP, or infer it if file_create + file_delete match.
+                if pid:
+                    process_tracker[pid]["score"] += 2
+                    process_tracker[pid]["stats"]["files_deleted"] += 1
                 
             # --- PROCESS ACTIVITY (1) ---
             elif action == "process_create":
                 features["nb_processes_created"] += 1
-                parent = event.get("parent_process")
-                if parent and "explorer.exe" not in parent.lower() and "services.exe" not in parent.lower():
-                    # Heuristique basique : si ce n'est pas un processus système standard
+                parent_name = event.get("parent_process", "")
+                if parent_name and "explorer.exe" not in parent_name.lower() and "services.exe" not in parent_name.lower():
                     features["nb_child_processes"] += 1
-                    features["process_depth"] = max(features["process_depth"], 2) # Simplification MVP
+                    features["process_depth"] = max(features["process_depth"], 2)
+                    
+                # Le créateur de processus (parent) est suspect
+                if parent_pid and parent_pid in process_tracker:
+                    process_tracker[parent_pid]["score"] += 2
+                    process_tracker[parent_pid]["stats"]["processes_created"] += 1
+                elif pid:
+                    process_tracker[pid]["score"] += 2
+                    process_tracker[pid]["stats"]["processes_created"] += 1
 
             # --- NETWORK ACTIVITY (3) ---
             elif action == "network_connection":
                 features["nb_connections"] += 1
+                if pid:
+                    process_tracker[pid]["score"] += 2
+                    process_tracker[pid]["stats"]["network_connections"] += 1
+                    
                 ip_str = event.get("network_ip")
                 if ip_str:
                     ips.add(ip_str)
@@ -109,19 +141,40 @@ class FeatureExtractor:
                     except ValueError:
                         pass
 
-        # Final aggregations
+        # Final aggregations globales
         features["nb_unique_extensions"] = len(extensions)
         features["nb_unique_ips"] = len(ips)
         
-        # Calculate Shannon entropy for all created filenames
         if filenames:
             combined_names = "".join(filenames)
             features["entropy_filenames"] = round(self._shannon_entropy(combined_names), 3)
+            
+        # Extraction du Top Suspect
+        top_suspect = None
+        max_score = -1
+        
+        for pid, data in process_tracker.items():
+            if data["stats"]["filenames"]:
+                combined_p_names = "".join(data["stats"]["filenames"])
+                p_entropy = round(self._shannon_entropy(combined_p_names), 3)
+                data["stats"]["entropy"] = p_entropy
+                if p_entropy > 5.0:
+                    data["score"] += 10 # Massive penalty for high entropy
+            else:
+                data["stats"]["entropy"] = 0.0
+                
+            if data["score"] > max_score:
+                max_score = data["score"]
+                top_suspect = data
+
+        if top_suspect:
+            # On retire la liste lourde des noms de fichiers pour ne garder que la data agrégée
+            top_suspect["stats"].pop("filenames", None)
+            features["top_suspect"] = top_suspect
 
         return features
 
     def _shannon_entropy(self, data: str) -> float:
-        """Calcule l'entropie de Shannon d'une chaîne de caractères (0.0 = prévisible, ~8.0 = aléatoire/chiffré)"""
         if not data:
             return 0.0
         entropy = 0.0
@@ -137,6 +190,5 @@ class FeatureExtractor:
         return entropy
 
     def reset_window(self, new_start_time: datetime = None):
-        """Réinitialise le buffer pour la prochaine fenêtre temporelle."""
         self.events_buffer.clear()
         self.window_start = new_start_time

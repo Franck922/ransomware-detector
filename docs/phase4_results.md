@@ -1,42 +1,75 @@
-# Phase 4 : Intégration Machine Learning (Random Forest & LSTM)
+# Phase 4 : Modélisation Algorithmique, Intelligence Artificielle et Dataset Synthétique (Random Forest)
 
-## 1. Objectif de la phase
-L'objectif de cette phase était d'améliorer notre moteur de détection basé sur des règles (Phase 3) en intégrant une intelligence artificielle capable de détecter des ransomwares complexes (WannaCry, NotPetya, CryptoWall) grâce à l'apprentissage automatique.
+**Date de réalisation** : 16 juillet 2026  
+**Dernière révision majeure (Phase 4.5)** : 21 juillet 2026  
+**Responsable** : Équipe Modélisation & Data Science (M2)
 
-## 2. Préparation du Dataset (Défense en Profondeur)
-Nous avons adopté une approche hybride (Système + Réseau) en fusionnant trois sources de données incompatibles à l'origine :
-1. **Logs Système Normaux** : Données générées par notre VM et capturées via Sysmon/Winlogbeat.
-2. **Trafic Réseau Normal** : Dataset public `UWF-ZeekData22`.
-3. **Trafic Réseau Malveillant** : Captures de ransomwares réels par le `Stratosphere IPS` (WannaCry, NotPetya, CryptoWall).
+---
 
-**Feature Engineering :**
-Puisque le dataset Stratosphere ne contenait que des données réseau, nous avons conçu un script Python pour :
-- Agréger le trafic en fenêtres de 10 secondes (pour imiter le comportement de notre API).
-- Injecter mathématiquement le comportement système attendu d'un ransomware (création massive de fichiers, entropie élevée > 5.0) en synchronisation avec le trafic réseau malveillant.
+## 1. Introduction et Choix Technologiques
 
-Le dataset final équilibré contenait **14 504 vecteurs temporels**.
+La Phase 4 représente le cœur intellectuel de notre projet EDR. L'objectif est de s'abstraire des seuils heuristiques rigides de la Phase 3 en confiant la prise de décision à un algorithme de Machine Learning.
+Nous avons sélectionné l'algorithme **Random Forest (Forêts Aléatoires)** de la librairie *scikit-learn* pour plusieurs raisons critiques en cybersécurité :
+1. **Interprétabilité :** Contrairement au Deep Learning (boîte noire), on peut interroger un Random Forest pour connaître l'importance de chaque variable (Feature Importance).
+2. **Robustesse au surapprentissage (Overfitting) :** En combinant plusieurs centaines d'arbres de décision générés sur des sous-échantillons aléatoires, l'algorithme annule les biais individuels de chaque arbre (Principe de l'apprentissage ensembliste / *Ensemble Learning*).
+3. **Vitesse d'inférence :** L'API doit rendre un verdict en moins d'une seconde. Random Forest est extrêmement rapide en prédiction (`rf_model.predict()`).
 
-## 3. Résultats et Comparaison des Modèles
+---
 
-Nous avons entraîné et comparé deux algorithmes distincts sur une répartition 80% Entraînement / 20% Test :
+## 2. Ingénierie des Données : Construction du Dataset
 
-| Métrique | Random Forest (scikit-learn) | LSTM (PyTorch) |
-|----------|------------------------------|----------------|
-| **Architecture** | 100 Arbres décisionnels (`class_weight='balanced'`) | 2 Couches LSTM + Dense + Sigmoid |
-| **Précision (Accuracy)** | 1.00 | 1.00 |
-| **F1-Score (Ransomware)** | 1.00 | 1.00 |
-| **Faux Positifs** | 0 | 0 |
-| **Faux Négatifs** | 0 | 0 |
-| **Avantage principal** | Très rapide à entraîner, Feature Importance interprétable. | Mémoire séquentielle, idéal pour détecter des attaques chronologiques lentes. |
+La conception d'un modèle d'IA anti-ransomware se heurte à un problème systémique majeur : **l'absence de données d'entraînement prêtes à l'emploi**. Les jeux de données publics existants (comme *Stratosphere IPS* du CTU de Prague ou *UWF-ZeekData22*) se composent exclusivement de captures réseau (PCAP, NetFlow, Zeek logs). Ils ne contiennent pas les événements internes du disque dur de la victime (Sysmon Event ID 11 ou 23).
 
-> [!NOTE]
-> Les scores parfaits (1.00) s'expliquent par le clivage net entre les données synthétiques malveillantes injectées et le comportement normal de la machine. Ce résultat valide intégralement la fiabilité du pipeline d'extraction des 12 features.
+### 2.1. L'Algorithme de Synthèse (`prepare_dataset.py`)
+Pour résoudre ce paradigme, nous avons développé un générateur de données hybride. L'objectif de ce script Python est de transformer des logs réseau bruts en **Vecteurs Mathématiques de 10 secondes** (les 12 dimensions définies en Phase 3), puis d'y injecter synthétiquement l'empreinte disque d'un ransomware.
 
-## 4. Analyse des Features (Feature Importance)
-Le Random Forest a révélé que les 3 indicateurs les plus fiables pour détecter un ransomware sont :
-1. `nb_files_renamed` (0.2001) : Typique du chiffrement qui modifie l'extension (ex: `.locky`).
-2. `process_depth` (0.1902) : L'injection de processus malveillants profonds pour contourner l'antivirus.
-3. `nb_files_created` (0.1806) : La génération des nouveaux fichiers chiffrés.
+1. **Agrégation Temporelle (Resampling) :** Le script lit les CSV contenant des milliers de requêtes IP. En utilisant la fonction `resample('10S')` de *pandas*, il écrase les adresses IP littérales pour les remplacer par des compteurs numériques stricts (ex: `nb_connections=14`, `nb_unique_ips=3`). L'IA est ainsi nourrie exclusivement de statistiques de vélocité.
+2. **Injection de Synthèse (Data Augmentation) :** Sur ces fenêtres de trafic malveillant, le script utilise la librairie `numpy.random` pour superposer artificiellement le comportement d'un disque dur attaqué :
+```python
+# Injection du comportement cryptographique sur une attaque réseau
+resampled['nb_files_created'] = np.random.randint(50, 200, size=len(resampled))
+resampled['entropy_filenames'] = np.random.uniform(5.0, 7.5, size=len(resampled))
+resampled['nb_child_processes'] = np.random.randint(2, 10, size=len(resampled))
+```
 
-## 5. Conclusion
-Le pipeline complet est opérationnel. Le moteur ML surpasse le simple seuil d'entropie de la Phase 3 en analysant simultanément 12 dimensions comportementales (fichiers, processus, réseau), offrant une détection robuste contre des familles de ransomwares modernes.
+---
+
+## 3. Évolution du Modèle de Menace (Les 3 Profils de la Phase 4.5)
+
+Lors de nos tests de validation, une faille conceptuelle critique est apparue : le phénomène de la "Règle Stricte".
+L'IA a d'abord été entraînée avec un unique profil de malware qui faisait **tout à la fois** (Réseau C2 + Création de fichiers + Suppression des originaux). Ainsi, lorsque nous avons attaqué notre propre EDR avec un simulateur PowerShell furtif qui se contentait uniquement de chiffrer sans rien supprimer et sans aller sur internet, le Random Forest a classifié l'attaque comme normale (Label `0`), considérant qu'il manquait les marqueurs réseau et suppressions pour confirmer la signature.
+
+**La Solution : La Diversification des profils d'entraînement.**
+Nous avons restructuré le générateur de Dataset pour inclure trois mutations (profils) de ransomwares, forçant l'IA à apprendre différentes tactiques d'évasion :
+
+- **Profil A (L'attaque APT Complète) :** Le malware se connecte à son serveur C2, spawn des processus (`vssadmin`), chiffre le disque et supprime toutes les traces. Ce profil regroupe les 12 métriques à leur paroxysme.
+- **Profil B (Furtif Offline / Air-Gapped) :** Ce profil simule un ransomware conçu pour frapper des systèmes sans internet. L'algorithme force artificiellement `nb_connections = 0`. L'IA apprend ainsi qu'une explosion d'entropie locale suffit à condamner le processus, même en l'absence absolue de communication réseau.
+- **Profil C (Évasion de Corbeille / Sans Suppression) :** Conçu pour pallier les défauts de capteurs (Sysmon qui rate l'Event 23), ce profil met `nb_files_deleted = 0`. L'IA apprend que la seule création effrénée de fichiers chiffrés est une preuve suffisante d'infection.
+
+Le dataset final généré compte **14 874 lignes** (dont 555 exemples de ransomwares mutants).
+
+---
+
+## 4. Entraînement et Standardisation (Pipeline ML)
+
+### 4.1. La Standardisation des Données (Z-Score Scaling)
+Avant d'être ingérées par l'algorithme, les données subissent une mise à l'échelle via `StandardScaler`. Cette étape transforme toutes les données pour qu'elles aient une moyenne de 0 et un écart-type de 1. C'est fondamental pour éviter que l'IA ne donne une pondération disproportionnée à la variable `nb_files_created` (qui monte à 500) au détriment de l'entropie (qui plafonne à 7.5).
+
+### 4.2. Résultats d'Entraînement (`train_model.py`)
+Le script d'entraînement industriel a généré notre cerveau `models/random_forest_model.pkl`. 
+Les résultats sur le sous-ensemble de Test (20% du dataset) sont parfaits, avec une précision et un rappel de 1.0 (100%), justifié par la ségrégation forte entre le bruit de fond Windows et l'empreinte massive de notre génération synthétique.
+
+| Classification Report | Precision | Recall | F1-Score |
+| :--- | :---: | :---: | :---: |
+| **Normal (0)** | 1.00 | 1.00 | 1.00 |
+| **Ransomware (1)** | 1.00 | 1.00 | 1.00 |
+
+---
+
+## 5. Synthèse Architecturale : La Détection Hybride
+Le fichier central `api/main.py` de notre EDR implémente le patron de conception (Design Pattern) de la **Détection Hybride**.
+L'API consulte simultanément :
+1. Le modèle **Machine Learning (Random Forest)**.
+2. Le **Moteur Heuristique (Rules Engine)** (défini en Phase 3).
+
+Cette redondance (Fallback) assure une tolérance aux pannes conceptuelles. Si une souche de ransomware utilise une tactique "Zero-Day" non apprise par le Random Forest (résultant en une classification `0`), l'explosion mathématique des Z-Scores captée par le Rules Engine suffira à hisser le score au-delà du seuil de `0.70`, déclenchant immédiatement l'ordre de riposte (KILL).

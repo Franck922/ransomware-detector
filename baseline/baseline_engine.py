@@ -58,8 +58,8 @@ class BaselineEngine:
             
             # Calcul numpy (très rapide)
             self.means[key] = float(np.mean(values))
-            # Ajout d'un epsilon très petit (1e-6) pour éviter la division par zéro plus tard
-            self.stds[key] = float(np.std(values)) + 1e-6
+            # On impose un écart-type minimum de 1.0 pour éviter les Z-scores astronomiques (division par zéro)
+            self.stds[key] = max(float(np.std(values)), 1.0)
             
         self.is_trained = True
         logger.info(f"Baseline calculée sur {len(self.history)} fenêtres de temps.")

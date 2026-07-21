@@ -1,144 +1,107 @@
-# Phase 3 — Résultats : Moteur de Règles & Tests Synthétiques
+# Phase 3 : Modélisation Comportementale, Algorithmique de Baseline et Moteur Heuristique
 
-**Date** : 15 juillet 2026  
-**Responsable principal** : M2 (Modèle de détection)  
-**Support** : M1 (Pipeline & Connecteur)
-
----
-
-## 1. Objectif de la Phase 3
-
-Développer un moteur de détection heuristique capable de distinguer un comportement
-normal d'un comportement de ransomware, en se basant sur les features comportementales
-calculées par le Feature Extractor (Phase 2) et les déviations Z-Score du Baseline Engine.
+**Date de réalisation** : 15 juillet 2026  
+**Dernière révision majeure** : 21 juillet 2026  
+**Responsable** : Équipe Détection (Modélisation M2)
 
 ---
 
-## 2. Architecture du Moteur de Règles
+## 1. Introduction et Contexte Théorique
 
-Le moteur de règles (`detector/rules_engine.py`) reçoit deux entrées :
+L'objectif fondamental de la Phase 3 est d'opérer une transition paradigmatique dans notre approche de la détection. Les solutions antivirus traditionnelles (EPP - Endpoint Protection Platforms) reposent historiquement sur des bases de données de signatures (hash MD5/SHA256). Cette approche statique est aujourd'hui frappée d'obsolescence face aux ransomwares polymorphes ou "fileless" qui mutent à chaque infection.
 
-- **Le vecteur de features** : 12 métriques calculées sur une fenêtre de 10 secondes
-  (nombre de fichiers créés, supprimés, entropie des noms, etc.)
-- **Les déviations Z-Score** : l'écart de chaque feature par rapport au comportement
-  normal appris pendant la phase de baseline (15 minutes en production, 10 fenêtres en test).
+Pour pallier cette limitation, notre EDR hybride se base sur l'**analyse comportementale dynamique (Behavioral Analysis)**. Le postulat est le suivant : peu importe le code source du malware ou sa signature, son *comportement* sur le système (chiffrer des milliers de fichiers en quelques secondes, supprimer des clichés instantanés, communiquer avec un serveur C2) reste immuable. 
 
-Il applique **4 règles de scoring** et produit un score de risque entre 0.0 et 1.0.
-Une alerte est déclenchée si le score dépasse **0.80** (80 points sur 100).
+La Phase 3 se concentre donc sur la création d'un moteur capable de "traduire" un flux continu de logs textuels (issus de Sysmon) en **métriques mathématiques évaluables en temps réel**.
 
 ---
 
-## 3. Définition des 4 Règles de Scoring
+## 2. Le Concept de "Vecteur de Features" (Feature Extraction)
 
-| # | Nom de la règle                            | Condition de déclenchement | Points | Justification |
-|---|--------------------------------------------|--------------------------- |--------|---------------|
-| 1 | Création massive de fichiers               | `nb_files_created > 30` ET `Z-Score création > 3.0` | +30 | Un ransomware crée les fichiers chiffrés à une vitesse inhumaine (centaines par seconde) |
-| 2 | Suppression massive de fichiers            | `nb_files_deleted > 30` ET `Z-Score suppression > 3.0` | +30 | Après chiffrement, le ransomware supprime systématiquement les originaux |
-| 3 | Entropie suspecte des noms de fichiers     | `nb_files_created > 0` ET `entropy > 5.0` | +40 | Les noms générés par un ransomware sont aléatoires (haute entropie de Shannon) |
-| 4 | Processus enfant suspect                   | `nb_child_processes > 0` ET activité fichier élevée | +20 | Les ransomwares lancent souvent des commandes système (ex: `vssadmin delete shadows`) |
+Dans le domaine de la Data Science, les algorithmes de Machine Learning sont incapables de traiter du texte brut de manière performante. Il est impératif de vectoriser l'information.
 
-**Score maximum** : 120 points, capé à 100.  
-**Seuil d'alerte** : 80 points (score ≥ 0.80).
+### 2.1. Le fenêtrage temporel (Time-Windowing)
+Notre composant `FeatureExtractor` (situé dans `features/feature_extractor.py`) agit comme un entonnoir temporel. Plutôt que d'analyser chaque événement Sysmon individuellement (ce qui générerait trop de faux positifs), l'algorithme regroupe les événements par **fenêtres strictes de 10 secondes**.
+Ce choix de 10 secondes a été défini empiriquement : il est suffisamment court pour bloquer un ransomware avant qu'il ne détruise trop de données, et suffisamment long pour capturer une tendance (vélocité).
 
----
+### 2.2. Constitution du Vecteur à 12 Dimensions
+À l'issue de chaque fenêtre de 10 secondes, l'extracteur fige le buffer d'événements et calcule 12 caractéristiques mathématiques (Features). Le résultat est un dictionnaire Python (un vecteur 1D) :
 
-## 4. Calibrage des Seuils
+1. **`nb_files_created`** : Nombre absolu d'Event ID 11 (FileCreate). Un ransomware génère un pic massif.
+2. **`nb_files_deleted`** : Nombre absolu d'Event ID 23 (FileDelete). Souvent utilisé pour détruire l'original après chiffrement.
+3. **`nb_files_renamed`** : Mouvement de renommage.
+4. **`nb_unique_extensions`** : Variété des extensions touchées.
+5. **`entropy_filenames`** : (Critique) Mesure de l'aléatoire dans les noms de fichiers créés.
+6. **`nb_processes_created`** : Nombre d'Event ID 1 (ProcessCreate).
+7. **`nb_child_processes`** : Nombre de sous-processus générés (souvent via `cmd.exe` ou `powershell.exe`).
+8. **`process_depth`** : Profondeur de l'arbre des processus.
+9. **`nb_connections`** : Volume total des Event ID 3 (NetworkConnection).
+10. **`nb_unique_ips`** : Nombre d'adresses IP distinctes contactées.
+11. **`nb_external_connections`** : Connexions vers des adresses IP publiques (hors RFC 1918).
+12. **`nb_dns_queries`** : Nombre de requêtes DNS (Event ID 22), souvent liées à la résolution d'un domaine DGA (Domain Generation Algorithm).
 
-### 4.1 Seuil d'entropie : de 6.5 à 5.0
-
-Lors des tests initiaux, le seuil d'entropie était fixé à 6.5. Cependant, les noms de
-fichiers générés aléatoirement par un ransomware (caractères alphanumériques, 12-16 caractères)
-produisent une entropie de Shannon d'environ **5.2 à 5.7**.
-
-| Type de nom de fichier           | Exemple                       | Entropie mesurée|
-|----------------------------------|-------------------------------|-----------------|
-| Document normal                  | `rapport_financier_2026.docx` | 3.0 — 3.5       |
-| Fichier chiffré (ransomware)     | `xK9mR2pLw4nQ.encrypted`      | 5.2 — 5.7       |
-| Chaîne binaire pure (théorique)  | `\x8f\xa2\x3b...`             | 7.5 — 8.0       |
-
-**Décision** : Le seuil a été abaissé à **5.0** pour capturer les noms de fichiers de
-ransomware réels tout en restant au-dessus de l'entropie des documents normaux (~3.5).
-Cela crée une marge de sécurité de **1.5 points** entre le normal et le seuil.
-
-### 4.2 Seuil de création/suppression : 30 fichiers par 10 secondes
-
-Ce seuil a été maintenu à 30 fichiers. Un utilisateur humain crée rarement plus de
-2-3 fichiers en 10 secondes. Le seuil de 30 laisse une marge confortable de **10x**
-l'activité normale observée.
+### 2.3. Focus sur l'Entropie de Shannon
+L'entropie de Shannon est une formule mathématique mesurant la quantité d'incertitude (ou d'aléatoire) dans une chaîne de caractères. 
+- Un fichier légitime tel que `rapport_annuel_2026.docx` possède une entropie faible (environ **3.0 à 3.5**).
+- Un fichier généré par un algorithme de chiffrement (ex: `A8F3J29X.locked`) possède une distribution de caractères imprévisible, résultant en une entropie élevée (souvent **> 5.5**).
+L'extraction de cette métrique est le pilier de notre heuristique anti-ransomware.
 
 ---
 
-## 5. Résultats des Tests
+## 3. L'Algorithme de Baseline (Apprentissage du Rythme Cardiaque)
 
-### 5.1 Protocole de test
+Pour détecter une anomalie, le système doit d'abord définir ce qu'est la "normalité" propre à la machine hôte. C'est la mission de la classe `BaselineEngine` (`baseline/baseline_engine.py`).
 
-Trois scénarios ont été testés via injection de logs synthétiques dans l'API `/ingest` :
+### 3.1. Phase d'Observation (T=0s à T=100s)
+Au lancement, le moteur entre en état `Apprentissage`. Il va intercepter les 10 premiers vecteurs (soit 10 * 10 secondes = 100 secondes) et les stocker dans une matrice en mémoire (`self.history`). Durant cette phase, l'utilisateur est invité à ne pas lancer d'activité malveillante, voire à générer un trafic "bruit de fond" légitime (navigation web, bureautique).
 
-1. **Scénario "Normal"** : 2 fichiers créés par fenêtre de 10s, noms prévisibles (`rapport_1.docx`)
-2. **Scénario "Ransomware"** : 150 fichiers créés + 150 supprimés en 10s, noms aléatoires (`.encrypted`)
-3. **Scénario "Suspicion partielle"** : 1 fichier créé avec un nom à haute entropie, sans suppression massive
+### 3.2. Calculs Statistiques (La Loi Normale)
+Une fois les 10 vecteurs atteints, l'algorithme fait appel à la librairie scientifique `numpy` pour calculer, pour chacune des 12 colonnes, deux valeurs fondamentales de la distribution statistique :
+- **La Moyenne ($\mu$) :** Représente l'espérance mathématique de la métrique en temps de paix.
+- **L'Écart-Type ($\sigma$) :** Représente la dispersion ou la variance. Il indique de combien la valeur a le droit de fluctuer autour de la moyenne sans être considérée comme anormale.
 
-### 5.2 Résultats
-
-| Scénario            | Fichiers créés| Fichiers supprimés| Entropie | Score   | Alerte     | Règles déclenchées |
-|---------------------|---------------|-------------------|----------|---------|------------|------------------- |
-| Normal              | 2             | 0                 | 3.0      | **0.0** |❌ Non      | Aucune            |
-| Ransomware          | 150           | 150               | 5.53     | **1.0** | ✅ **OUI** | R1 + R2 + R3      |
-| Suspicion partielle | 1             | 0                 | 5.5      | **0.4** | ❌ Non     | R3 uniquement     |
-
-### 5.3 Métriques de performance
-
-| Métrique | Valeur | Commentaire |
-|----------|--------|-------------|
-| **Taux de détection (Recall)** | **100%** | Le scénario ransomware a été détecté à chaque exécution |
-| **Faux positifs** | **0%** | Aucune alerte sur les scénarios normaux ou partiellement suspects |
-| **Temps de détection** | **< 1 seconde** | L'alerte est levée dès la fin de la fenêtre de 10s contenant l'attaque |
-| **Score de confiance** | **1.0 / 1.0** | Score maximal atteint lors de l'attaque ransomware |
-
-### 5.4 Features les plus déclenchantes
-
-En ordre d'importance pour la détection :
-
-1. **`entropy_filenames`** (+40 pts) — Le marqueur le plus discriminant. L'entropie passe
-   de ~3.0 (normal) à ~5.5 (ransomware), soit une augmentation de 83%.
-2. **`nb_files_created`** (+30 pts) — Passe de 2 (normal) à 150 (ransomware), soit un
-   Z-Score de 247.
-3. **`nb_files_deleted`** (+30 pts) — Passe de 0 (normal) à 150 (ransomware), soit un
-   Z-Score de 150 000 000.
+### 3.3. Analyse d'Incidents et Correctif de la Variance Nulle
+**Description du Bug :** Lors de nos tests initiaux, nous avons fait face à une division par zéro provoquant une erreur fatale (`ZeroDivisionError`) ou des Z-Scores dépassant les 60 millions.
+**Cause algorithmique :** Si la machine virtuelle est strictement inactive pendant les 100 secondes d'apprentissage, l'écart-type ($\sigma$) calculé pour la création de fichier est de `0.0`. L'algorithme initial ajoutait un epsilon arbitraire `1e-6` pour éviter le crash. Cependant, diviser une valeur de 62 créations de fichiers par `0.000001` donnait mathématiquement `62 000 000`.
+**Résolution :** Nous avons implémenté un correctif mathématique de type "plancher". Nous forçons l'écart-type à avoir une valeur minimum absolue de `1.0`. 
+```python
+# Extrait du code corrigé dans baseline_engine.py
+# On impose un écart-type minimum de 1.0 pour éviter les Z-scores astronomiques
+self.stds[key] = max(float(np.std(values)), 1.0)
+```
+Cette modification garantit la robustesse du calcul mathématique en toute circonstance.
 
 ---
 
-## 6. Limites identifiées
+## 4. Le Calcul d'Anomalie (Z-Score)
 
-1. **Règle 4 non testée en conditions réelles** : La détection de processus enfants
-   nécessite des logs Sysmon EventID 1 générés par un vrai ransomware (ex: `vssadmin`,
-   `bcdedit`). Cette règle sera validée en Phase 5 avec l'intégration VM complète.
+Dès que la Baseline est verrouillée (`self.is_trained = True`), le système passe en état `Détection`. Les nouveaux vecteurs ne sont plus ajoutés à l'historique. Ils sont évalués en temps réel via la formule du **Score Standard (Z-Score)** :
 
-2. **Baseline fixe après entraînement** : Actuellement, le baseline ne se met pas à jour
-   après la phase d'apprentissage. Un utilisateur changeant ses habitudes pourrait
-   déclencher des faux positifs à long terme. (Amélioration possible : baseline glissant.)
+$$ Z = \frac{X - \mu}{\sigma} $$
 
-3. **Intégration VM à finaliser** : Le forwarder PowerShell doit être synchronisé avec le
-   fichier Winlogbeat le plus récent. Ce point sera résolu en Phase 5.
+Où :
+- $X$ = La valeur capturée dans la fenêtre actuelle (ex: 60 fichiers créés).
+- $\mu$ = La moyenne calculée lors de la baseline (ex: 0.5).
+- $\sigma$ = L'écart-type calculé lors de la baseline (minimum 1.0).
 
----
-
-## 7. Fichiers produits lors de la Phase 3
-
-| Fichier | Description |
-|---------|-------------|
-| `detector/rules_engine.py` | Moteur de règles heuristique (4 règles, scoring 0-100) |
-| `detector/tests/test_rules_engine.py` | 3 tests unitaires (normal, ransomware, partiel) |
-| `agent/simulate_ransomware.ps1` | Script PowerShell de simulation d'attaque pour la VM |
-| `agent/forwarder.ps1` | Agent de transfert des logs Winlogbeat vers l'API |
-| `docs/phase3_results.md` | Ce document de résultats |
+Si le Z-score dépasse un certain seuil (ex: > 3.0), cela signifie statistiquement que l'événement observé a moins de 0,1% de chances de se produire par hasard dans un comportement normal. C'est une alarme forte pour le moteur de détection.
 
 ---
 
-## 8. Conclusion
+## 5. Le Moteur Heuristique (Rules Engine)
 
-Le moteur de règles adaptatives est **opérationnel** et capable de détecter un
-comportement de ransomware avec un taux de détection de 100% et un taux de faux positifs
-de 0% sur les données synthétiques testées. Le calibrage du seuil d'entropie (de 6.5 à 5.0)
-a été la modification clé pour atteindre ces performances. Le système est prêt pour
-l'intégration avec les modèles de Machine Learning (Phase 4) et les tests end-to-end (Phase 5).
+Bien que le Machine Learning (Phase 4) soit notre méthode de détection principale, nous avons appliqué un principe fondamental de cybersécurité : **la défense en profondeur**. Nous avons codé un `RulesEngine` (`detector/rules_engine.py`) qui agit comme un système expert (Expert System) basé sur des règles déterministes codées en dur.
+
+### 5.1. Logique de Pondération
+Le moteur de règles lit le vecteur actuel et ses Z-Scores, puis attribue des points de "risque" (maximum 100 points, normalisés de 0.0 à 1.0) selon un arbre de décision strict :
+- **Règle 1 (Création massive) :** Si `nb_files_created > 30` ET `Z-score > 3.0` $\rightarrow$ **+30 points**.
+- **Règle 2 (Suppression massive) :** Si `nb_files_deleted > 30` ET `Z-score > 3.0` $\rightarrow$ **+30 points**.
+- **Règle 3 (Signature cryptographique) :** Si `entropy_filenames > 5.0` $\rightarrow$ **+40 points**.
+- **Règle 4 (Comportement de processus) :** Si processus enfants suspects en parallèle d'une activité fichier $\rightarrow$ **+20 points**.
+
+### 5.2. Tuning et Abaissement du Seuil (Threshold)
+Initialement, le seuil de déclenchement (`alert_threshold`) était fixé à **0.80**.
+Cependant, l'analyse d'une simulation d'attaque a mis en lumière une limitation critique au niveau de l'Event Tracing for Windows (ETW) et de Sysmon : les suppressions de fichiers (Event 23) ne remontaient pas systématiquement à cause des mécanismes de corbeille de l'OS. 
+En conséquence, le ransomware marquait 30 points (création) + 40 points (entropie), s'arrêtant à **0.70**, juste sous le radar de l'alerte.
+
+Pour garantir une sécurité optimale face aux ransomwares furtifs qui évitent les suppressions franches, **le seuil a été rabaissé à 0.70** dans `api/main.py`. Grâce à ce tuning précis, le moteur heuristique est capable d'intercepter à lui seul l'attaque de notre simulateur, démontrant ainsi sa capacité à opérer en solution de repli (fallback) autonome en cas de défaillance du modèle de Machine Learning.
