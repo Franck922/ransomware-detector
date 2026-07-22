@@ -1,0 +1,20 @@
+{
+    "action": "KILL",
+    "pid": 6128,
+    "process": "powershell.exe",
+    "parent": null,
+    "parent_pid": null,
+    "score": 260,
+    "confidence": "HIGH",
+    "stats": {
+        "files_created": 250,
+        "files_deleted": 0,
+        "network_connections": 0,
+        "processes_created": 0,
+        "entropy": 5.673
+    },
+    "reasons": [
+        "250 file creations",
+        "High entropy (5.673)"
+    ]
+}

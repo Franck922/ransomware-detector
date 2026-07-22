@@ -127,8 +127,9 @@ def ingest_logs(payload: IngestPayload):
                     # Analyse par le modèle Machine Learning (Random Forest)
                     if ML_ENABLED:
                         try:
-                            # Convertir toutes les 12 features en DataFrame
-                            df_features = pd.DataFrame([features_10s])
+                            # Filtrer les clés non-numériques (top_suspect est un dict)
+                            numeric_features = {k: v for k, v in features_10s.items() if isinstance(v, (int, float))}
+                            df_features = pd.DataFrame([numeric_features])
                             # Standardiser les features (retourne un array NumPy)
                             X_scaled = scaler.transform(df_features)
                             # Reconstruire le DataFrame avec les noms de colonnes originaux pour éliminer le warning sklearn
@@ -156,7 +157,7 @@ def ingest_logs(payload: IngestPayload):
                             if stats.get("network_connections", 0) > 0: reasons.append(f"Network activity ({stats['network_connections']} connections)")
                             if stats.get("processes_created", 0) > 0: reasons.append(f"Child process detected ({stats['processes_created']})")
 
-                            payload = {
+                            kill_payload = {
                                 "action": "KILL",
                                 "pid": top_suspect.get("pid"),
                                 "process": top_suspect.get("process_name"),
@@ -170,7 +171,7 @@ def ingest_logs(payload: IngestPayload):
 
                             if score >= 80:
                                 logger.error(f"🚨🚨🚨 ALERTE CRITIQUE : Ransomware Détecté (Score: {score}) par {detection_source} ! 🚨🚨🚨")
-                                pending_commands.append(payload)
+                                pending_commands.append(kill_payload)
                                 logger.warning(f"🔨 Commande KILL pour PID {top_suspect.get('pid')} ajoutée à la file d'attente.")
                                 
                                 # Historisation de l'incident pour le Dashboard SOC (Phase 6)
@@ -181,7 +182,7 @@ def ingest_logs(payload: IngestPayload):
                                 report_filename = f"reports/{timestamp_str}_{top_suspect.get('process_name', 'unknown')}.json"
                                 try:
                                     with open(report_filename, "w") as f:
-                                        json.dump(payload, f, indent=4)
+                                        json.dump(kill_payload, f, indent=4)
                                     logger.info(f"📄 Rapport d'incident sauvegardé : {report_filename}")
                                 except Exception as e:
                                     logger.error(f"Erreur lors de la sauvegarde du rapport : {e}")
@@ -194,7 +195,7 @@ def ingest_logs(payload: IngestPayload):
                             alert_data = {
                                 "timestamp": "now",
                                 "source": detection_source,
-                                "payload": payload
+                                "kill_payload": kill_payload
                             }
                             alert_history.append(alert_data)
                         else:

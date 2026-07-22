@@ -80,6 +80,7 @@ Dès que la Baseline est verrouillée (`self.is_trained = True`), le système pa
 $$ Z = \frac{X - \mu}{\sigma} $$
 
 Où :
+
 - $X$ = La valeur capturée dans la fenêtre actuelle (ex: 60 fichiers créés).
 - $\mu$ = La moyenne calculée lors de la baseline (ex: 0.5).
 - $\sigma$ = L'écart-type calculé lors de la baseline (minimum 1.0).
@@ -93,13 +94,16 @@ Si le Z-score dépasse un certain seuil (ex: > 3.0), cela signifie statistiqueme
 Bien que le Machine Learning (Phase 4) soit notre méthode de détection principale, nous avons appliqué un principe fondamental de cybersécurité : **la défense en profondeur**. Nous avons codé un `RulesEngine` (`detector/rules_engine.py`) qui agit comme un système expert (Expert System) basé sur des règles déterministes codées en dur.
 
 ### 5.1. Logique de Pondération
+
 Le moteur de règles lit le vecteur actuel et ses Z-Scores, puis attribue des points de "risque" (maximum 100 points, normalisés de 0.0 à 1.0) selon un arbre de décision strict :
+
 - **Règle 1 (Création massive) :** Si `nb_files_created > 30` ET `Z-score > 3.0` $\rightarrow$ **+30 points**.
 - **Règle 2 (Suppression massive) :** Si `nb_files_deleted > 30` ET `Z-score > 3.0` $\rightarrow$ **+30 points**.
 - **Règle 3 (Signature cryptographique) :** Si `entropy_filenames > 5.0` $\rightarrow$ **+40 points**.
 - **Règle 4 (Comportement de processus) :** Si processus enfants suspects en parallèle d'une activité fichier $\rightarrow$ **+20 points**.
 
 ### 5.2. Tuning et Abaissement du Seuil (Threshold)
+
 Initialement, le seuil de déclenchement (`alert_threshold`) était fixé à **0.80**.
 Cependant, l'analyse d'une simulation d'attaque a mis en lumière une limitation critique au niveau de l'Event Tracing for Windows (ETW) et de Sysmon : les suppressions de fichiers (Event 23) ne remontaient pas systématiquement à cause des mécanismes de corbeille de l'OS. 
 En conséquence, le ransomware marquait 30 points (création) + 40 points (entropie), s'arrêtant à **0.70**, juste sous le radar de l'alerte.

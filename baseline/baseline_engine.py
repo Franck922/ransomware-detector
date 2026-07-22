@@ -50,7 +50,9 @@ class BaselineEngine:
             return
 
         # Récupère le nom de toutes les features depuis le premier dictionnaire
-        feature_keys = self.history[0].keys()
+        # On filtre les clés non-numériques (ex: top_suspect qui est un dict)
+        feature_keys = [k for k in self.history[0].keys() 
+                        if isinstance(self.history[0][k], (int, float))]
         
         for key in feature_keys:
             # Extrait toutes les valeurs pour cette feature spécifique
@@ -75,6 +77,10 @@ class BaselineEngine:
 
         deviations = {}
         for key, value in current_features.items():
+            # On ignore les clés non-numériques (ex: top_suspect)
+            if not isinstance(value, (int, float)):
+                continue
+                
             mean = self.means.get(key, 0.0)
             std = self.stds.get(key, 1e-6)
             
