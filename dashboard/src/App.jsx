@@ -107,16 +107,16 @@ export default function App() {
 
   // Recharts Chart Data
   const chartData = [
-    { name: '10s', files: 2, entropy: 1.2 },
-    { name: '20s', files: 5, entropy: 1.5 },
-    { name: '30s', files: 1, entropy: 1.1 },
-    { name: '40s', files: 3, entropy: 1.4 },
-    { name: '50s', files: 2, entropy: 1.2 },
-    { name: '60s', files: alerts.length > 0 ? 231 : 2, entropy: alerts.length > 0 ? 5.68 : 1.2 },
-    { name: '70s', files: 0, entropy: 1.0 },
-    { name: '80s', files: 0, entropy: 1.0 },
-    { name: '90s', files: 1, entropy: 1.2 },
-    { name: '100s', files: 3, entropy: 1.1 }
+    { name: '-90', files: 2, entropy: 1.2 },
+    { name: '-80', files: 5, entropy: 1.5 },
+    { name: '-70', files: 1, entropy: 1.1 },
+    { name: '-60', files: 3, entropy: 1.4 },
+    { name: '-50', files: 2, entropy: 1.2 },
+    { name: '-40', files: alerts.length > 0 ? 231 : 2, entropy: alerts.length > 0 ? 5.68 : 1.2 },
+    { name: '-30', files: 0, entropy: 1.0 },
+    { name: '-20', files: 0, entropy: 1.0 },
+    { name: '-10', files: 1, entropy: 1.2 },
+    { name: '0', files: 3, entropy: 1.1 }
   ];
 
   const pieData = [
@@ -384,7 +384,7 @@ export default function App() {
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="name" stroke="#94a3b8" style={{ fontSize: 10 }} />
+                      <XAxis dataKey="name" stroke="#94a3b8" style={{ fontSize: 10 }} label={{ value: "Chronologie (secondes glissantes)", position: 'insideBottom', offset: -5, style: { fontSize: 10, fill: '#94a3b8', fontWeight: 600 } }} height={40} />
                       <YAxis stroke="#94a3b8" style={{ fontSize: 10 }} />
                       <Tooltip />
                       <Area type="monotone" dataKey="files" stroke="#dc2626" fillOpacity={0.04} fill="#fef2f2" name="Fichiers" />
@@ -1041,8 +1041,8 @@ export default function App() {
               <div className="border border-border rounded-lg p-5">
                 <h4 className="font-bold text-sm mb-2">Signification des Features Comportementales</h4>
                 <p className="text-xs text-text-muted leading-relaxed">
-                  L'EDR surveille 12 features système fondamentales. Les plus importantes pour le Ransomware sont l'**entropie de Shannon** 
-                  des noms de fichiers (détecte les extensions chiffrées/aléatoires) et le nombre de **créations de fichiers** (Event ID 11).
+                  L'EDR surveille 12 features système fondamentales. Les plus importantes pour le Ransomware sont l'entropie de Shannon
+                  des noms de fichiers (détecte les extensions chiffrées/aléatoires) et le nombre de créations de fichiers (Event ID 11).
                 </p>
               </div>
             </div>
