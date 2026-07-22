@@ -496,14 +496,21 @@ export default function App() {
             <div className="grid grid-cols-3 gap-6">
               <div className="col-span-2 panel">
                 <h3 className="panel-title mb-6">Indicateurs de Charge de VM-WIN10-LAB</h3>
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-3 gap-6">
                   <div className="border border-border rounded-lg p-5">
                     <span className="text-[10px] font-bold text-text-muted block mb-1 uppercase">Utilisation CPU</span>
-                    <div className="text-3xl font-bold">14%</div>
+                    <div className="text-2xl font-bold">8%</div>
+                    <span className="text-[10px] text-text-muted">2 vCPUs configurés</span>
                   </div>
                   <div className="border border-border rounded-lg p-5">
                     <span className="text-[10px] font-bold text-text-muted block mb-1 uppercase">Utilisation RAM</span>
-                    <div className="text-3xl font-bold">4.2 / 8.0 Go</div>
+                    <div className="text-2xl font-bold">2.1 / 4.0 Go</div>
+                    <span className="text-[10px] text-text-muted">Mémoire vive VM</span>
+                  </div>
+                  <div className="border border-border rounded-lg p-5">
+                    <span className="text-[10px] font-bold text-text-muted block mb-1 uppercase">Statut Réseau</span>
+                    <div className="text-2xl font-bold text-brand-success">Connecté</div>
+                    <span className="text-[10px] text-text-muted">Custom (VMnet1)</span>
                   </div>
                 </div>
               </div>
@@ -512,11 +519,11 @@ export default function App() {
                 <h3 className="panel-title mb-6">Stockage Disque C:</h3>
                 <div className="space-y-4">
                   <div className="flex justify-between text-xs">
-                    <span>Espace occupé : 34.5 Go</span>
-                    <span>Total : 60 Go</span>
+                    <span>Espace occupé : 18.2 Go</span>
+                    <span>Total : 40 Go</span>
                   </div>
                   <div className="h-3 bg-gray-100 border border-border rounded-full overflow-hidden">
-                    <div className="h-full bg-brand-primary" style={{ width: '57%' }}></div>
+                    <div className="h-full bg-brand-primary" style={{ width: '45.5%' }}></div>
                   </div>
                 </div>
               </div>
