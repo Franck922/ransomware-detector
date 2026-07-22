@@ -36,6 +36,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configuration CORS pour autoriser le Dashboard React à requêter l'API
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permet toutes les origines pour le lab
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Instanciation globale des composants
 parser = SysmonParser()
 extractor_10s = FeatureExtractor(window_seconds=10)

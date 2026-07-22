@@ -1,0 +1,21 @@
+services:
+  api:
+    build: .
+    container_name: edr-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./reports:/app/reports
+    restart: unless-stopped
+
+  dashboard:
+    image: nginx:alpine
+    container_name: edr-dashboard
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dashboard/dist:/usr/share/nginx/html
+    restart: unless-stopped
+    depends_on:
+      - api
