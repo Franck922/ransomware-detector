@@ -1,9 +1,9 @@
-# Ransomware Detector — MVP EDR Académique
+# Ransomware Detector - MVP EDR Académique
 
 Système de **Détection et Réponse aux Incidents** (EDR) capable d'identifier et de neutraliser en temps réel des comportements de ransomwares sur un poste Windows, grâce à l'analyse comportementale des signaux système (Sysmon), des algorithmes de Machine Learning (Random Forest, LSTM) et un moteur de règles heuristiques.
 
-**ECE Paris — Bachelor 3 Réseaux & Cybersécurité FALL 2026**  
-**Projet de substitution de stage — Juillet / Août 2026**
+**ECE Paris - Bachelor 3 Réseaux & Cybersécurité FALL 2026**  
+**Projet de substitution de stage - Juillet / Août 2026**
 
 ---
 
