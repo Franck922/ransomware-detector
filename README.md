@@ -199,27 +199,27 @@ ransomware-detector/
 
 ## 📅 Phases du projet
 
-### Phase 1 — Environnement de Laboratoire (5–11 juillet)
+### Phase 1 - Environnement de Laboratoire (5–11 juillet)
 Mise en place de l'infrastructure : VM Windows 10 sous VMware, installation de Sysmon (config SwiftOnSecurity), Winlogbeat, réseau VMnet1 (192.168.10.0/24), snapshot de référence, dépôt GitHub.
 
-### Phase 2 — Pipeline de Données & Baseline (12–19 juillet)
+### Phase 2 - Pipeline de Données & Baseline (12–19 juillet)
 Développement du Parser Sysmon (filtrage Event ID 1/3/11/23), du Feature Extractor (12 features sur fenêtres de 10s et 30s), du Baseline Engine (calcul de moyenne et écart-type sur 15 min d'activité normale), et de l'endpoint `/ingest` sur FastAPI.
 
-### Phase 3 — Moteur de Règles & Tests (20–26 juillet)
+### Phase 3 - Moteur de Règles & Tests (20–26 juillet)
 Implémentation du Rules Engine : système de scoring pondéré avec 4 règles calibrées sur le baseline (création massive > seuil, entropie > 5.0, processus enfants suspects, connexions réseau). Création du premier simulateur de ransomware (V1). Validation des seuils et ajustement pour minimiser les faux positifs.
 
-### Phase 4 — Machine Learning (27 juillet – 4 août)
+### Phase 4 - Machine Learning (27 juillet – 4 août)
 Génération d'un dataset synthétique de 14 874 lignes avec 3 profils de ransomware (A : chiffrement massif, B : exfiltration réseau, C : wiper). Entraînement d'un Random Forest (scikit-learn) avec précision et rappel de 100% sur le jeu de test. Entraînement d'un LSTM (PyTorch) pour comparaison. Analyse de la feature importance (entropie et fichiers créés sont les plus discriminants).
 
-### Phase 5 — API Complète & Response Engine (5–10 août) ✅
+### Phase 5 - API Complète & Response Engine (5–10 août) ✅
 Développement du Response Engine V2.1 avec ciblage chirurgical par PID. Implémentation d'un système de score pondéré intra-processus (+1 file create, +2 file delete, +2 process create, +2 network, +10 entropie > 5.0). Réponse proportionnée (Score < 50 : log, 50-79 : alerte, >= 80 : KILL). Extraction de l'arbre généalogique (Parent PID/Name). Archivage JSON automatique dans `reports/`. Création du simulateur V2 (APT complet avec C2, vssadmin, chiffrement massif).
 
-### Phase 6 — Dashboard, Docker & Intégration Finale (11–16 août) ⏳
+### Phase 6 - Dashboard, Docker & Intégration Finale (11–16 août) ⏳
 - **Dashboard Web SOC** : Développement de l'interface graphique (HTML/JS/Chart.js) destinée aux analystes. Composants prévus : jauge de risque en temps réel, timeline des événements Sysmon, liste des alertes avec détails (PID, Score, Preuves), journal des réponses automatiques (Kill/Isolate).
 - **Conteneurisation Docker** : Écriture du `Dockerfile` pour le backend Python (FastAPI + modèles ML) et du `docker-compose.yml` orchestrant l'API (port 8000) et le Dashboard (port 8080). Objectif : `docker-compose up` démarre tout le serveur en une commande.
 - **Intégration IA (optionnel)** : Connexion d'un LLM (Gemini ou Mistral) pour générer des recommandations post-incident à partir des rapports JSON.
 
-### Phase 7 — Documentation, Rapport & Soutenance (17–20 août) ⏳
+### Phase 7 - Documentation, Rapport & Soutenance (17–20 août) ⏳
 Documentation technique finale complète, rédaction du rapport académique (contexte, choix techniques justifiés, résultats, perspectives), répétition de la démonstration live (exécution ransomware → détection → réponse automatique visible dans le Dashboard).
 
 ---
@@ -436,6 +436,6 @@ La documentation technique détaillée de chaque phase est disponible dans le do
 
 ## 📄 Licence
 
-Projet académique de substitution de stage — ECE Paris 2026.  
+Projet académique de substitution de stage - ECE Paris 2026.  
 Usage strictement pédagogique et éducatif.  
 Aucune donnée réelle de ransomware n'est utilisée. Les simulations sont inoffensives et confinées dans un environnement de laboratoire isolé.
