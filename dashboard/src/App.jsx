@@ -340,9 +340,6 @@ export default function App() {
             </button>
           </form>
           
-          <div className="text-[10px] text-center text-text-muted border-t border-border pt-4">
-            Identifiants démo : <span className="font-mono bg-gray-50 p-1 rounded">Franck / admin123</span>
-          </div>
         </div>
       </div>
     );
@@ -515,26 +512,8 @@ export default function App() {
           </div>
         </div>
 
-        <div className="p-4 border-t border-border mt-auto space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-brand-primaryGlow text-brand-primary flex items-center justify-center font-bold text-[10px]">
-                {user?.username?.[0] || 'U'}
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold tracking-tight text-text-main">{user?.username || 'Utilisateur'}</span>
-                <span className="text-[8px] text-text-muted">{user?.role || 'Analyste'}</span>
-              </div>
-            </div>
-            <button 
-              onClick={handleLogout} 
-              className="text-text-muted hover:text-brand-danger transition-colors"
-              title="Se déconnecter"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="flex items-center gap-2 text-[10px] text-text-muted font-medium pt-2 border-t border-dashed border-border">
+        <div className="p-4 border-t border-border mt-auto">
+          <div className="flex items-center gap-2 text-[10px] text-text-muted font-medium">
             <span className={`w-1.5 h-1.5 rounded-full ${sysStatus.status === 'online' ? 'bg-brand-success animate-pulse' : 'bg-brand-danger'}`}></span>
             <span>EDR Daemon : {sysStatus.status === 'online' ? 'Actif' : 'Hors ligne'}</span>
           </div>
@@ -582,10 +561,29 @@ export default function App() {
               {activeTab === 'docs' && 'Documentation et Runbooks d\'incidents intégrés'}
             </p>
           </div>
-          <button onClick={fetchData} className="btn btn-outline">
-            <RefreshCw className="w-3.5 h-3.5" />
-            Rafraichir
-          </button>
+          <div className="flex items-center gap-4">
+            <button onClick={fetchData} className="btn btn-outline">
+              <RefreshCw className="w-3.5 h-3.5" />
+              Rafraichir
+            </button>
+            
+            <div className="flex items-center gap-3 pl-4 border-l border-border">
+              <div className="w-8 h-8 rounded-full bg-brand-primaryGlow text-brand-primary flex items-center justify-center font-bold text-xs shadow-sm">
+                {user?.username?.[0] || 'U'}
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-xs font-bold text-text-main leading-none">{user?.username || 'Utilisateur'}</span>
+                <span className="text-[10px] text-text-muted mt-0.5">{user?.role || 'Analyste'}</span>
+              </div>
+              <button 
+                onClick={handleLogout} 
+                className="p-1.5 text-text-muted hover:text-brand-danger hover:bg-red-50 rounded-lg transition-all ml-1"
+                title="Se déconnecter"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </header>
 
         {/* ====================================================================
