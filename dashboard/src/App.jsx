@@ -712,11 +712,18 @@ export default function App() {
                   <div className="space-y-1">
                     <span className="text-[9px] font-bold text-text-muted uppercase block">Permissions</span>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {(user?.permissions || "Contrôle total, Isolation, Exclusions").split(',').map((p, i) => (
-                        <span key={i} className="px-1.5 py-0.5 text-[9px] rounded-full bg-brand-primaryGlow text-brand-primary font-medium">
-                          {p.trim()}
-                        </span>
-                      ))}
+                      {typeof user?.permissions === 'string' 
+                        ? user.permissions.split(',').map((p, i) => (
+                            <span key={i} className="px-1.5 py-0.5 text-[9px] rounded-full bg-brand-primaryGlow text-brand-primary font-medium">
+                              {p.trim()}
+                            </span>
+                          ))
+                        : ["Contrôle total", "Isolation", "Exclusions"].map((p, i) => (
+                            <span key={i} className="px-1.5 py-0.5 text-[9px] rounded-full bg-brand-primaryGlow text-brand-primary font-medium">
+                              {p}
+                            </span>
+                          ))
+                      }
                     </div>
                   </div>
                   
