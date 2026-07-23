@@ -1058,50 +1058,94 @@ export default function App() {
             TAB: RULES CONFIG
            ==================================================================== */}
         {activeTab === 'rules_config' && (
-          <div className="panel">
-            <h3 className="panel-title mb-6">Coefficients et Poids des Règles Heuristiques</h3>
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Règle Sysmon</th>
-                  <th>Événement Déclencheur</th>
-                  <th>Poids Attribué</th>
-                  <th>Impact Score</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Création massive de fichiers</td>
-                  <td>Event ID 11 (&gt; 30 fichiers créés en 10s et Z-Score &gt; 3.0)</td>
-                  <td><strong>+30 points</strong></td>
-                  <td><span className="badge badge-danger">Élevé</span></td>
-                </tr>
-                <tr>
-                  <td>Suppression massive de fichiers</td>
-                  <td>Event ID 23 (&gt; 30 fichiers supprimés en 10s et Z-Score &gt; 3.0)</td>
-                  <td><strong>+30 points</strong></td>
-                  <td><span className="badge badge-danger">Élevé</span></td>
-                </tr>
-                <tr>
-                  <td>Entropie anormale des noms</td>
-                  <td>Calcul d'entropie de Shannon (&gt; 5.0)</td>
-                  <td><strong>+40 points</strong></td>
-                  <td><span className="badge badge-danger">Critique</span></td>
-                </tr>
-                <tr>
-                  <td>Processus enfant suspect</td>
-                  <td>Event ID 1 (vssadmin, cmd, powershell lancé avec activité fichier)</td>
-                  <td><strong>+20 points</strong></td>
-                  <td><span className="badge badge-warning">Moyen</span></td>
-                </tr>
-                <tr>
-                  <td>Connexion réseau externe</td>
-                  <td>Event ID 3 (IP publique destination avec activité fichier)</td>
-                  <td><strong>+10 points</strong></td>
-                  <td><span className="badge badge-success">Faible</span></td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="space-y-6">
+            <div className="panel">
+              <h3 className="panel-title mb-6">Coefficients et Poids des Règles Heuristiques</h3>
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>Règle Sysmon</th>
+                    <th>Événement Déclencheur</th>
+                    <th>Poids Attribué</th>
+                    <th>Impact Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Création massive de fichiers</td>
+                    <td>Event ID 11 (&gt; 30 fichiers créés en 10s et Z-Score &gt; 3.0)</td>
+                    <td><strong>+30 points</strong></td>
+                    <td><span className="badge badge-danger">Élevé</span></td>
+                  </tr>
+                  <tr>
+                    <td>Suppression massive de fichiers</td>
+                    <td>Event ID 23 (&gt; 30 fichiers supprimés en 10s et Z-Score &gt; 3.0)</td>
+                    <td><strong>+30 points</strong></td>
+                    <td><span className="badge badge-danger">Élevé</span></td>
+                  </tr>
+                  <tr>
+                    <td>Entropie anormale des noms</td>
+                    <td>Calcul d'entropie de Shannon (&gt; 5.0)</td>
+                    <td><strong>+40 points</strong></td>
+                    <td><span className="badge badge-danger">Critique</span></td>
+                  </tr>
+                  <tr>
+                    <td>Processus enfant suspect</td>
+                    <td>Event ID 1 (vssadmin, cmd, powershell lancé avec activité fichier)</td>
+                    <td><strong>+20 points</strong></td>
+                    <td><span className="badge badge-warning">Moyen</span></td>
+                  </tr>
+                  <tr>
+                    <td>Connexion réseau externe</td>
+                    <td>Event ID 3 (IP publique destination avec activité fichier)</td>
+                    <td><strong>+10 points</strong></td>
+                    <td><span className="badge badge-success">Faible</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* SEUILS DE MITIGATION */}
+            <div className="panel">
+              <h3 className="panel-title mb-6">Politique de Mitigation & Seuils de Décision de l'EDR</h3>
+              <div className="grid grid-cols-3 gap-6">
+                
+                <div className="border border-border rounded-2xl p-5 bg-gray-50 flex flex-col space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-brand-success bg-brand-successGlow px-2 py-0.5 rounded-full">Score 0 - 49</span>
+                    <span className="text-lg">🛡️</span>
+                  </div>
+                  <h4 className="font-bold text-sm text-text-main">Surveillance Passive</h4>
+                  <p className="text-xs text-text-muted leading-relaxed">
+                    Le niveau de menace est faible. Les indicateurs comportementaux restent dans les normes de la baseline. L'activité est simplement logguée et archivée.
+                  </p>
+                </div>
+
+                <div className="border border-border rounded-2xl p-5 bg-white flex flex-col space-y-3 border-l-4 border-l-brand-warning shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-brand-warning bg-brand-warningGlow px-2 py-0.5 rounded-full">Score 50 - 79</span>
+                    <span className="text-lg">⚠️</span>
+                  </div>
+                  <h4 className="font-bold text-sm text-text-main">Alerte de Sécurité</h4>
+                  <p className="text-xs text-text-muted leading-relaxed">
+                    Comportement anormal détecté (ex: connexions réseau suspectes + Z-score élevé). L'événement est propulsé sur le SOC et génère une alerte visuelle pour investigation.
+                  </p>
+                </div>
+
+                <div className="border border-border rounded-2xl p-5 bg-red-50 flex flex-col space-y-3 border-l-4 border-l-brand-danger shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-brand-danger bg-brand-dangerGlow px-2 py-0.5 rounded-full">Score >= 80</span>
+                    <span className="text-lg">🔥</span>
+                  </div>
+                  <h4 className="font-bold text-sm text-text-main">Riposte Active (KILL)</h4>
+                  <p className="text-xs text-text-muted leading-relaxed">
+                    <strong>Niveau de menace critique.</strong> Le comportement correspond typiquement à une attaque (ex: Entropie élevée + Créations massives = +70 pts).
+                    <span className="block mt-2 font-semibold text-brand-danger">Action : KILL automatique du processus via son PID et Isolation réseau immédiate.</span>
+                  </p>
+                </div>
+
+              </div>
+            </div>
           </div>
         )}
 
