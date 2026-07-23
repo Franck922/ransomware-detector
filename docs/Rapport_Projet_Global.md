@@ -63,12 +63,55 @@ Les deux modèles ont atteint un F1-Score parfait (1.00) sur notre dataset de te
 
 ---
 
-## 5. Guide de Déploiement et d'Utilisation
+## 5. Moteur de Réponse Active & Forensics (Phase 5)
+
+Afin de passer d'un système de détection simple à une solution de riposte automatisée, nous avons développé en Phase 5 un moteur de réponse active (Response Engine).
+
+### 5.1 L'Agent de Riposte PowerShell
+Un agent scripté en PowerShell tourne en boucle infinie (avec un polling HTTP toutes les 2 secondes) sur la machine surveillée.
+* **KILL chirurgical par PID** : Dès qu'une menace dépasse un score de 80 points (score heuristique ou de Machine Learning), l'API FastAPI expose un ordre de blocage pour l'agent. Celui-ci extrait le PID (identifiant de processus) responsable du chiffrement suspect et exécute la commande `Stop-Process -Id <PID> -Force` localement.
+* **Isolation Réseau** : Si la menace est critique, l'agent reconfigure en temps réel le Pare-feu de Windows pour couper toutes les communications réseau entrantes et sortantes de la VM, à l'exception unique des requêtes vers le serveur API de l'EDR.
+
+### 5.2 Rapports Forensics JSON
+À chaque blocage de processus malveillant, un fichier diagnostic structuré en JSON est généré et stocké dans le répertoire `reports/` de l'hôte. Ce fichier contient l'intégralité de la télémétrie capturée dans les 10 secondes ayant précédé l'attaque, facilitant l'analyse post-mortem de l'incident par un analyste SOC.
+
+---
+
+## 6. Console Web d'Administration SOC & Persistance SQLite (Phase 6)
+
+La Phase 6 s'est concentrée sur le développement d'une console d'administration SOC robuste, sécurisée et connectée en temps réel au backend EDR.
+
+### 6.1 Architecture Web (React & Recharts)
+Développée avec React, Vite et Tailwind CSS v4, l'interface SOC propose un design moderne et professionnel (style SaaS sombre/ardoise) offrant une navigation fluide à travers ses modules (Dashboard, Terminaux, Forensic, Éditeur d'exclusions, Logs d'audit, etc.).
+
+### 6.2 Persistance des Données (SQLite)
+Pour éviter la perte des données de détection lors d'un redémarrage du backend, nous avons migré l'application vers une base de données relationnelle locale **SQLite** (`alerts.db`). Cette base conserve :
+* L'historique complet des alertes.
+* Les répertoires et processus exclus de la surveillance (Exclusions).
+* La traçabilité de toutes les interventions des analystes (Audit logs).
+
+### 6.3 Sécurité, Authentification & Gestion des Analystes
+* **Authentification** : L'accès à la console SOC est verrouillé par un écran de connexion. Les mots de passe des analystes sont hachés de manière sécurisée en base de données avec l'algorithme SHA-256.
+* **Enrôlement (Sign-up)** : Un écran de création de compte permet de déclarer de nouveaux analystes dans la base en leur attribuant l'un des trois niveaux de droits (N1 : Lecture seule / N2 : Réponse & Isolation / N3 : Contrôle total).
+* **Traçabilité Nominative** : Chaque action sensible (kill manuel, isolation, modification des exclusions, création de compte) est liée à l'utilisateur connecté et enregistrée dynamiquement dans la table `audit_logs` de SQLite avec l'adresse IP source de l'analyste.
+
+---
+
+## 7. Guide de Déploiement et d'Utilisation
 
 1. **Démarrer l'API (Serveur) :** 
-   Sur la machine d'analyse, lancer `uvicorn api.main:app --host 0.0.0.0 --port 8000`.
-2. **Lancer la collecte (Agent) :** 
-   Sur la machine Windows cible, s'assurer que Sysmon est installé et lancer `Start-Service winlogbeat`.
-3. *(Optionnel : Transfert des logs)* Si Winlogbeat est configuré en mode 'Fichier local' (`output.file`), exécuter un script Python (`log_forwarder.py`) sur la VM pour lire ce fichier `.ndjson` et envoyer des requêtes HTTP POST au serveur FastAPI.
-4. **Analyse ML :** 
-   Pour ré-entraîner les modèles ou visualiser les graphiques (Matrice de confusion, Feature Importance), ouvrir le notebook `notebooks/exploration_eda.ipynb`.
+   Sur la machine d'analyse, lancer `uvicorn api.main:app --host 0.0.0.0 --port 8000`. La base de données SQLite `alerts.db` s'initialise automatiquement avec l'utilisateur administrateur Franck (mot de passe `admin123`).
+2. **Démarrer la Console SOC (Frontend) :**
+   Dans le dossier `dashboard`, lancer `npm run dev` pour accéder au port `5173` ou compiler pour la production avec `npm run build`.
+3. **Lancer la collecte (Agent) :** 
+   Sur la machine Windows cible, s'assurer que Sysmon est installé et démarrer l'agent PowerShell `.\agent.ps1` en mode administrateur.
+4. **Attaque & Riposte :**
+   Exécuter le script `.\simulate_ransomware.ps1` sur la VM cible. Constater l'affichage de l'alerte en direct sur la console web et la terminaison automatique du processus de chiffrement.
+5. **Investigation Forensic :** 
+   Se connecter sur la console SOC avec Franck pour consulter les graphes temporels d'entropie, extraire les rapports JSON diagnostics de la menace, éditer les règles heuristiques ou ajouter des dossiers de confiance dans l'onglet des exclusions.
+
+---
+
+## 8. Équipe Projet
+* **Membres du groupe :** Franck & Groupe de projet ECE Paris
+* **Encadreur de projet :** Enseignant de substitution de stage / ECE Paris Fall 2026
