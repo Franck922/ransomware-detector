@@ -1185,7 +1185,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {exclusions.map((e) => (
+                  {Array.isArray(exclusions) && exclusions.map((e) => (
                     <tr key={e.id}>
                       <td><span className="badge badge-warning">{e.type}</span></td>
                       <td className="font-mono text-xs">{e.path}</td>
@@ -1200,7 +1200,7 @@ export default function App() {
                       </td>
                     </tr>
                   ))}
-                  {exclusions.length === 0 && (
+                  {(!Array.isArray(exclusions) || exclusions.length === 0) && (
                     <tr>
                       <td colSpan="4" className="text-center text-text-muted py-6">Aucune exclusion configurée.</td>
                     </tr>
@@ -1228,15 +1228,15 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                {auditLogs.map((log, index) => (
+                {Array.isArray(auditLogs) && auditLogs.map((log, index) => (
                   <tr key={index}>
                     <td>{log.timestamp}</td>
                     <td className="font-semibold">{log.username}</td>
                     <td>
                       <span className={`badge ${
-                        log.action.includes('KILL') || log.action.includes('Isolation')
+                        log.action && (log.action.includes('KILL') || log.action.includes('Isolation'))
                           ? 'badge-danger' 
-                          : (log.action.includes('Exclusion') ? 'badge-warning' : 'badge-success')
+                          : (log.action && log.action.includes('Exclusion') ? 'badge-warning' : 'badge-success')
                       }`}>
                         {log.action}
                       </span>
@@ -1245,6 +1245,11 @@ export default function App() {
                     <td className="font-mono text-xs">{log.ip_source}</td>
                   </tr>
                 ))}
+                {(!Array.isArray(auditLogs) || auditLogs.length === 0) && (
+                  <tr>
+                    <td colSpan="5" className="text-center text-text-muted py-6">Aucun log d'audit enregistré.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
