@@ -443,6 +443,11 @@ from pydantic import BaseModel
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+class SignupRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "Analyste SOC (N1)"
     
 class ExclusionRequest(BaseModel):
     type: str
@@ -454,6 +459,34 @@ class AuditLogRequest(BaseModel):
     action: str
     details: str
     ip_source: str = "127.0.0.1"
+
+@app.post("/signup")
+def signup(req: SignupRequest):
+    permissions = "Contrôle total, Isolation, Exclusions" if "N3" in req.role else (
+        "Lecture seule, Analyse" if "N1" in req.role else "Lecture, Isolation"
+    )
+    hashed_pass = hashlib.sha256(req.password.encode()).hexdigest()
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id FROM users WHERE username = ?", (req.username,))
+    if cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Nom d'utilisateur déjà utilisé")
+        
+    try:
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, role, permissions) VALUES (?, ?, ?, ?)",
+            (req.username, hashed_pass, req.role, permissions)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=f"Erreur d'inscription: {str(e)}")
+        
+    conn.close()
+    return {"status": "success", "message": "Compte analyste créé avec succès !"}
 
 @app.post("/login")
 def login(req: LoginRequest):

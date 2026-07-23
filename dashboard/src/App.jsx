@@ -23,6 +23,12 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
 
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [signupUsername, setSignupUsername] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupRole, setSignupRole] = useState("Analyste SOC (N1)");
+  const [signupSuccessMessage, setSignupSuccessMessage] = useState("");
+
   const [activeTab, setActiveTab] = useState('overview');
   const [alerts, setAlerts] = useState([]);
   const [sysStatus, setSysStatus] = useState({
@@ -93,7 +99,46 @@ export default function App() {
       return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
-
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setLoginError("");
+    setSignupSuccessMessage("");
+    try {
+      const res = await fetch('http://localhost:8000/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: signupUsername,
+          password: signupPassword,
+          role: signupRole
+        })
+      });
+      if (res.ok) {
+        setSignupSuccessMessage("Compte créé avec succès ! Connectez-vous.");
+        setIsSignUp(false);
+        setLoginUsername(signupUsername);
+        setLoginPassword("");
+        // Log d'audit
+        await fetch('http://localhost:8000/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: "EDR System",
+            action: "Création de compte",
+            details: `Nouvel analyste inscrit : ${signupUsername} (${signupRole})`,
+            ip_source: "192.168.10.2"
+          })
+        });
+        setSignupUsername("");
+        setSignupPassword("");
+      } else {
+        const err = await res.json();
+        setLoginError(err.detail || "Erreur lors de l'inscription");
+      }
+    } catch (e) {
+      setLoginError("Impossible de contacter le serveur API.");
+    }
+  };
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError("");
@@ -295,8 +340,12 @@ export default function App() {
             <div className="w-12 h-12 bg-brand-primary rounded-xl flex items-center justify-center font-bold text-white text-lg mb-2 shadow-md">
               EDR
             </div>
-            <h2 className="text-xl font-bold tracking-tight">Console d'administration SOC</h2>
-            <p className="text-xs text-text-muted">Connectez-vous pour piloter l'agent de réponse active</p>
+            <h2 className="text-xl font-bold tracking-tight">
+              {isSignUp ? "Créer un compte analyste" : "Console d'administration SOC"}
+            </h2>
+            <p className="text-xs text-text-muted">
+              {isSignUp ? "Inscrivez un nouvel analyste dans la base de données" : "Connectez-vous pour piloter l'agent de réponse active"}
+            </p>
           </div>
 
           {loginError && (
@@ -305,42 +354,113 @@ export default function App() {
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-muted uppercase">Identifiant</label>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value)}
-                  placeholder="Franck"
-                  required
-                  className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
-                />
-                <User className="w-4 h-4 text-text-muted absolute left-3 top-3" />
-              </div>
+          {signupSuccessMessage && (
+            <div className="p-3 bg-brand-successGlow border border-brand-success text-brand-success text-xs rounded-xl text-center font-medium">
+              ✅ {signupSuccessMessage}
             </div>
+          )}
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-muted uppercase">Mot de passe</label>
-              <div className="relative">
-                <input 
-                  type="password" 
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
-                />
-                <Lock className="w-4 h-4 text-text-muted absolute left-3 top-3" />
+          {isSignUp ? (
+            <form onSubmit={handleSignup} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-text-muted uppercase">Identifiant</label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    value={signupUsername}
+                    onChange={(e) => setSignupUsername(e.target.value)}
+                    placeholder="Nom d'utilisateur"
+                    required
+                    className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
+                  />
+                  <User className="w-4 h-4 text-text-muted absolute left-3 top-3" />
+                </div>
               </div>
-            </div>
 
-            <button type="submit" className="btn btn-primary w-full py-2.5 mt-2">
-              Se connecter
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-text-muted uppercase">Mot de passe</label>
+                <div className="relative">
+                  <input 
+                    type="password" 
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
+                  />
+                  <Lock className="w-4 h-4 text-text-muted absolute left-3 top-3" />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-text-muted uppercase">Rôle SOC attribué</label>
+                <select 
+                  value={signupRole}
+                  onChange={(e) => setSignupRole(e.target.value)}
+                  className="w-full border border-border rounded-lg p-2.5 text-xs bg-white outline-none focus:border-brand-primary pointer-events-auto"
+                >
+                  <option value="Analyste SOC (N1)">Analyste SOC (N1) - Lecture seule</option>
+                  <option value="Analyste EDR (N2)">Analyste EDR (N2) - Réponse & Isolation</option>
+                  <option value="SOC Manager (N3)">SOC Manager (N3) - Contrôle total</option>
+                </select>
+              </div>
+
+              <button type="submit" className="btn btn-primary w-full py-2.5 mt-2">
+                Créer le compte
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-text-muted uppercase">Identifiant</label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    placeholder="Franck"
+                    required
+                    className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
+                  />
+                  <User className="w-4 h-4 text-text-muted absolute left-3 top-3" />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-text-muted uppercase">Mot de passe</label>
+                <div className="relative">
+                  <input 
+                    type="password" 
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
+                  />
+                  <Lock className="w-4 h-4 text-text-muted absolute left-3 top-3" />
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary w-full py-2.5 mt-2">
+                Se connecter
+              </button>
+            </form>
+          )}
+
+          <div className="text-center pt-2">
+            <button 
+              type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setLoginError("");
+                setSignupSuccessMessage("");
+              }}
+              className="text-xs text-brand-primary hover:underline font-semibold"
+            >
+              {isSignUp ? "Déjà membre ? Se connecter" : "Pas de compte ? S'inscrire"}
             </button>
-          </form>
-          
+          </div>
+
         </div>
       </div>
     );
