@@ -108,7 +108,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: signupUsername,
+          email: signupUsername,
           password: signupPassword,
           role: signupRole
         })
@@ -146,7 +146,7 @@ export default function App() {
       const res = await fetch('http://localhost:8000/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: loginUsername, password: loginPassword })
+        body: JSON.stringify({ email: loginUsername, password: loginPassword })
       });
       if (res.ok) {
         const data = await res.json();
@@ -363,13 +363,13 @@ export default function App() {
           {isSignUp ? (
             <form onSubmit={handleSignup} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-muted uppercase">Identifiant</label>
+                <label className="text-[10px] font-bold text-text-muted uppercase">Adresse email professionnelle</label>
                 <div className="relative">
                   <input 
-                    type="text" 
+                    type="email" 
                     value={signupUsername}
                     onChange={(e) => setSignupUsername(e.target.value)}
-                    placeholder="Nom d'utilisateur"
+                    placeholder="analyste@soc.edr.local"
                     required
                     className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
                   />
@@ -412,13 +412,13 @@ export default function App() {
           ) : (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-muted uppercase">Identifiant</label>
+                <label className="text-[10px] font-bold text-text-muted uppercase">Adresse email professionnelle</label>
                 <div className="relative">
                   <input 
-                    type="text" 
+                    type="email" 
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
-                    placeholder="Franck"
+                    placeholder="franck@soc.edr.local"
                     required
                     className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
                   />

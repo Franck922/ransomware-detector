@@ -33,7 +33,7 @@ def init_db():
     # Table des utilisateurs
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
+            email TEXT PRIMARY KEY,
             password_hash TEXT,
             role TEXT,
             permissions TEXT
@@ -68,8 +68,8 @@ def init_db():
         default_password = "admin123"
         hashed = hashlib.sha256(default_password.encode()).hexdigest()
         cursor.execute(
-            "INSERT INTO users (username, password_hash, role, permissions) VALUES (?, ?, ?, ?)",
-            ("Franck", hashed, "SOC Manager (N3)", "Contrôle total, Isolation, Exclusions")
+            "INSERT INTO users (email, password_hash, role, permissions) VALUES (?, ?, ?, ?)",
+            ("franck@soc.edr.local", hashed, "SOC Manager (N3)", "Contrôle total, Isolation, Exclusions")
         )
         
     # Insertion des exclusions de base par défaut
@@ -441,11 +441,11 @@ def get_agent_commands():
 from pydantic import BaseModel
 
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 class SignupRequest(BaseModel):
-    username: str
+    email: str
     password: str
     role: str = "Analyste SOC (N1)"
     
@@ -470,15 +470,15 @@ def signup(req: SignupRequest):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id FROM users WHERE username = ?", (req.username,))
+    cursor.execute("SELECT email FROM users WHERE email = ?", (req.email,))
     if cursor.fetchone():
         conn.close()
-        raise HTTPException(status_code=400, detail="Nom d'utilisateur déjà utilisé")
+        raise HTTPException(status_code=400, detail="Adresse email déjà utilisée")
         
     try:
         cursor.execute(
-            "INSERT INTO users (username, password_hash, role, permissions) VALUES (?, ?, ?, ?)",
-            (req.username, hashed_pass, req.role, permissions)
+            "INSERT INTO users (email, password_hash, role, permissions) VALUES (?, ?, ?, ?)",
+            (req.email, hashed_pass, req.role, permissions)
         )
         conn.commit()
     except Exception as e:
@@ -492,7 +492,7 @@ def signup(req: SignupRequest):
 def login(req: LoginRequest):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT password_hash, role, permissions FROM users WHERE username = ?", (req.username,))
+    cursor.execute("SELECT password_hash, role, permissions FROM users WHERE email = ?", (req.email,))
     row = cursor.fetchone()
     conn.close()
     
@@ -505,10 +505,10 @@ def login(req: LoginRequest):
         
     return {
         "status": "success",
-        "username": req.username,
+        "username": req.email,
         "role": row[1],
         "permissions": row[2],
-        "token": f"session_{req.username}_{hashlib.sha256(req.username.encode()).hexdigest()[:8]}"
+        "token": f"session_{req.email}_{hashlib.sha256(req.email.encode()).hexdigest()[:8]}"
     }
 
 @app.get("/exclusions")
