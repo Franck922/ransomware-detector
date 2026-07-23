@@ -43,6 +43,7 @@ export default function App() {
   
   const [newExclusionPath, setNewExclusionPath] = useState("");
   const [newExclusionType, setNewExclusionType] = useState("Folder");
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   // Simulation Sandbox
   const [sandboxFile, setSandboxFile] = useState("");
@@ -567,21 +568,61 @@ export default function App() {
               Rafraichir
             </button>
             
-            <div className="flex items-center gap-3 pl-4 border-l border-border">
-              <div className="w-8 h-8 rounded-full bg-brand-primaryGlow text-brand-primary flex items-center justify-center font-bold text-xs shadow-sm">
-                {user?.username?.[0] || 'U'}
-              </div>
-              <div className="flex flex-col text-left">
-                <span className="text-xs font-bold text-text-main leading-none">{user?.username || 'Utilisateur'}</span>
-                <span className="text-[10px] text-text-muted mt-0.5">{user?.role || 'Analyste'}</span>
-              </div>
+            <div className="relative">
               <button 
-                onClick={handleLogout} 
-                className="p-1.5 text-text-muted hover:text-brand-danger hover:bg-red-50 rounded-lg transition-all ml-1"
-                title="Se déconnecter"
+                onClick={() => setShowProfileDropdown(!showProfileDropdown)} 
+                className="flex items-center gap-3 pl-4 border-l border-border hover:opacity-80 transition-opacity"
               >
-                <LogOut className="w-4 h-4" />
+                <div className="w-8 h-8 rounded-full bg-brand-primaryGlow text-brand-primary flex items-center justify-center font-bold text-xs shadow-sm">
+                  {user?.username?.[0] || 'U'}
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-xs font-bold text-text-main leading-none">{user?.username || 'Utilisateur'}</span>
+                  <span className="text-[10px] text-text-muted mt-0.5">{user?.role || 'Analyste'}</span>
+                </div>
               </button>
+
+              {showProfileDropdown && (
+                <div className="absolute right-0 mt-3 w-64 bg-white border border-border rounded-xl shadow-xl p-4 z-50 text-xs text-left space-y-3">
+                  <div className="border-b border-border pb-2">
+                    <div className="font-bold text-text-main text-sm">{user?.username || 'Franck'}</div>
+                    <div className="text-[10px] text-text-muted mt-0.5">{user?.role || 'SOC Manager (N3)'}</div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-bold text-text-muted uppercase block">Permissions</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(user?.permissions || "Contrôle total, Isolation, Exclusions").split(',').map((p, i) => (
+                        <span key={i} className="px-1.5 py-0.5 text-[9px] rounded-full bg-brand-primaryGlow text-brand-primary font-medium">
+                          {p.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="border-t border-border pt-2 flex flex-col gap-1">
+                    <button 
+                      onClick={() => {
+                        setActiveTab('team');
+                        setShowProfileDropdown(false);
+                      }}
+                      className="w-full text-left py-1.5 px-2.5 hover:bg-gray-50 rounded-lg text-text-muted hover:text-text-main transition-all flex items-center gap-2"
+                    >
+                      <span>👥</span> Profil & Équipe SOC
+                    </button>
+                    <button 
+                      onClick={() => {
+                        handleLogout();
+                        setShowProfileDropdown(false);
+                      }}
+                      className="w-full text-left py-1.5 px-2.5 hover:bg-red-50 text-brand-danger rounded-lg transition-all flex items-center gap-2 font-semibold"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      Se déconnecter
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
