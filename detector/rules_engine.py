@@ -66,6 +66,16 @@ class RulesEngine:
             triggered_rules.append(f"Processus enfant suspect avec activité fichier (+{points}pts)")
 
         # ---------------------------------------------------------
+        # REGLE 5 : Connexion réseau externe (Exfiltration / C2)
+        # ---------------------------------------------------------
+        # Si une connexion réseau externe apparaît pendant une activité fichier
+        connections = features.get("nb_connections", 0)
+        if connections > 0 and (files_created > 10 or files_deleted > 10):
+            points = 10
+            score_points += points
+            triggered_rules.append(f"Connexion réseau externe avec activité fichier (+{points}pts)")
+
+        # ---------------------------------------------------------
         # Calcul du score final
         # ---------------------------------------------------------
         # Score maximum capé à 100 points

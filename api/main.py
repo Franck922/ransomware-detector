@@ -10,6 +10,27 @@ import gzip
 import joblib
 import pandas as pd
 
+import sqlite3
+import os
+
+# Initialisation de la Base de Données SQLite pour la Persistance
+DB_PATH = "alerts.db"
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            source TEXT,
+            kill_payload TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+
 # Variables globales pour le Response Engine
 ML_ENABLED = False
 rf_model = None
@@ -24,7 +45,27 @@ except Exception as e:
 
 # File d'attente des commandes pour l'Agent PowerShell
 pending_commands = []
-alert_history = []
+
+# Charger l'historique depuis SQLite
+def load_alert_history():
+    history = []
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT timestamp, source, kill_payload FROM alerts ORDER BY id DESC")
+        rows = cursor.fetchall()
+        for row in rows:
+            history.append({
+                "timestamp": row[0],
+                "source": row[1],
+                "kill_payload": json.loads(row[2])
+            })
+        conn.close()
+    except Exception as e:
+        logging.error(f"Erreur lors du chargement de l'historique : {e}")
+    return history
+
+alert_history = load_alert_history()
 
 # Configuration basique des logs
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -203,11 +244,24 @@ def ingest_logs(payload: IngestPayload):
                                 logger.info(f"ℹ️ Comportement suspect mineur (Score: {score}). Aucune action requise.")
                                 
                             alert_data = {
-                                "timestamp": "now",
+                                "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                 "source": detection_source,
                                 "kill_payload": kill_payload
                             }
-                            alert_history.append(alert_data)
+                            # Insertion SQLite
+                            try:
+                                conn = sqlite3.connect(DB_PATH)
+                                cursor = conn.cursor()
+                                cursor.execute(
+                                    "INSERT INTO alerts (timestamp, source, kill_payload) VALUES (?, ?, ?)",
+                                    (alert_data["timestamp"], alert_data["source"], json.dumps(kill_payload))
+                                )
+                                conn.commit()
+                                conn.close()
+                            except Exception as db_err:
+                                logger.error(f"Erreur insertion SQLite : {db_err}")
+                                
+                            alert_history.insert(0, alert_data) # Insère en haut de la liste pour l'affichage immédiat
                         else:
                             logger.error(f"🚨 ALERTE par {detection_source} mais aucun processus suspect identifié.")
                     else:
@@ -304,7 +358,7 @@ def analyze_features(features: dict):
 
 @app.get("/alerts")
 def get_alerts():
-    return {"alerts": alert_history}
+    return {"alerts": load_alert_history()}
 
 @app.post("/response/kill/{pid}")
 def response_kill(pid: int):

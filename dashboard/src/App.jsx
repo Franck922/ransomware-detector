@@ -578,12 +578,27 @@ export default function App() {
                   <h3 className="panel-title">Chaîne de Causalité & Preuves</h3>
                   
                   <div className="bg-gray-50 border border-border rounded-xl p-5">
-                    <h4 className="text-[10px] font-bold text-text-muted uppercase mb-3">Preuves d'activité suspecte</h4>
-                    <ul className="space-y-2 text-xs font-mono text-brand-danger font-medium">
+                    <h4 className="text-[10px] font-bold text-text-muted uppercase mb-3">Preuves d'activité suspecte & Détail du Score</h4>
+                    <ul className="space-y-2 text-xs font-mono text-brand-danger font-medium mb-4">
                       {(selectedAlert.reasons || []).map((r, i) => (
                         <li key={i}>✓ {r}</li>
                       ))}
                     </ul>
+                    
+                    <div className="border-t border-border pt-3 mt-3 text-xs text-text-muted">
+                      <span className="font-bold text-[10px] text-text-muted uppercase block mb-2">Barème de décompte du processus :</span>
+                      <ul className="space-y-1 font-mono text-[10px]">
+                        <li>• Créations de fichiers : {selectedAlert.stats?.files_created || 0} x 1 pt = {selectedAlert.stats?.files_created || 0} pts</li>
+                        <li>• Suppressions de fichiers : {selectedAlert.stats?.files_deleted || 0} x 2 pts = {(selectedAlert.stats?.files_deleted || 0) * 2} pts</li>
+                        <li>• Connexions réseau : {selectedAlert.stats?.network_connections || 0} x 2 pts = {(selectedAlert.stats?.network_connections || 0) * 2} pts</li>
+                        <li>• Processus enfants : {selectedAlert.stats?.processes_created || 0} x 2 pts = {(selectedAlert.stats?.processes_created || 0) * 2} pts</li>
+                        <li>• Pénalité entropie (&gt;5.0) : {selectedAlert.stats?.entropy > 5.0 ? "+10" : "0"} pts (Entropie : {selectedAlert.stats?.entropy || 0})</li>
+                        <li className="border-t border-dashed border-border pt-1.5 font-bold text-brand-danger flex justify-between">
+                          <span>Total accumulé :</span>
+                          <span>{selectedAlert.score} pts</span>
+                        </li>
+                      </ul>
+                    </div>
                   </div>
 
                   <div className="border border-border rounded-xl p-5">
@@ -777,7 +792,13 @@ export default function App() {
               <tbody>
                 <tr>
                   <td>Création massive de fichiers</td>
-                  <td>Event ID 11 (&gt; 250 fichiers en 10s)</td>
+                  <td>Event ID 11 (&gt; 30 fichiers créés en 10s et Z-Score &gt; 3.0)</td>
+                  <td><strong>+30 points</strong></td>
+                  <td><span className="badge badge-danger">Élevé</span></td>
+                </tr>
+                <tr>
+                  <td>Suppression massive de fichiers</td>
+                  <td>Event ID 23 (&gt; 30 fichiers supprimés en 10s et Z-Score &gt; 3.0)</td>
                   <td><strong>+30 points</strong></td>
                   <td><span className="badge badge-danger">Élevé</span></td>
                 </tr>
@@ -789,13 +810,13 @@ export default function App() {
                 </tr>
                 <tr>
                   <td>Processus enfant suspect</td>
-                  <td>Event ID 1 (vssadmin, cmd, powershell)</td>
+                  <td>Event ID 1 (vssadmin, cmd, powershell lancé avec activité fichier)</td>
                   <td><strong>+20 points</strong></td>
                   <td><span className="badge badge-warning">Moyen</span></td>
                 </tr>
                 <tr>
                   <td>Connexion réseau externe</td>
-                  <td>Event ID 3 (IP publique destination)</td>
+                  <td>Event ID 3 (IP publique destination avec activité fichier)</td>
                   <td><strong>+10 points</strong></td>
                   <td><span className="badge badge-success">Faible</span></td>
                 </tr>
