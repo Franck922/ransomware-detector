@@ -320,8 +320,8 @@ export default function App() {
               {activeTab === 'exclusions' && 'Regles d\'Exclusion du Moteur'}
               {activeTab === 'audit_logs' && 'Journal d\'Audit des Analystes'}
               {activeTab === 'team' && 'Membres de l\'Equipe SOC'}
-              {activeTab === 'settings' && 'Configuration Systemse EDR'}
-              {activeTab === 'docs' && 'Guide de Reference Systemse'}
+              {activeTab === 'settings' && 'Configuration Système EDR'}
+              {activeTab === 'docs' && 'Guide de Référence Système'}
             </h1>
             <p className="text-xs text-text-muted mt-1">
               {activeTab === 'overview' && 'Indicateurs de compromission et activites globales'}
@@ -547,7 +547,7 @@ export default function App() {
                       <h3 className="font-bold text-sm text-brand-danger">{a.kill_payload?.process} (PID: {a.kill_payload?.pid})</h3>
                     </div>
                     <div className="text-xs text-text-muted mt-2">
-                      Horodatage : {a.timestamp} • Score : {a.kill_payload?.score}/100
+                      Horodatage : {a.timestamp || 'now'} • Score : {a.kill_payload?.score} (Seuil critique : 80)
                     </div>
                   </div>
                   <button 
@@ -589,11 +589,19 @@ export default function App() {
                   <div className="border border-border rounded-xl p-5">
                     <h4 className="text-[10px] font-bold text-text-muted uppercase mb-4">Arbre de Processus (Sysmon Event 1)</h4>
                     <div className="space-y-3 font-mono text-xs">
-                      <div className="p-3 bg-gray-50 border border-border rounded-lg flex justify-between">
-                        <span>{selectedAlert.parent}</span>
-                        <span className="text-text-muted">Parent PID: {selectedAlert.parent_pid}</span>
-                      </div>
-                      <div className="text-center text-text-muted font-bold text-sm">↓</div>
+                      {selectedAlert.parent && selectedAlert.parent !== 'unknown' && selectedAlert.parent !== 'null' ? (
+                        <>
+                          <div className="p-3 bg-gray-50 border border-border rounded-lg flex justify-between">
+                            <span>{selectedAlert.parent}</span>
+                            <span className="text-text-muted">Parent PID: {selectedAlert.parent_pid || 'N/A'}</span>
+                          </div>
+                          <div className="text-center text-text-muted font-bold text-sm">↓</div>
+                        </>
+                      ) : (
+                        <div className="p-3 bg-gray-50 border border-border rounded-lg text-text-muted italic text-center">
+                          Information sur le processus parent non disponible (déjà terminé)
+                        </div>
+                      )}
                       <div className="p-3 bg-brand-dangerGlow border border-brand-danger text-brand-danger rounded-lg flex justify-between">
                         <span>{selectedAlert.process} (Top Suspect)</span>
                         <span>PID: {selectedAlert.pid}</span>
@@ -1024,26 +1032,89 @@ export default function App() {
             TAB: DOCS / RUNBOOKS
            ==================================================================== */}
         {activeTab === 'docs' && (
-          <div className="panel space-y-6">
-            <h3 className="panel-title">EDR SOC Runbooks & Aide</h3>
-            
-            <div className="space-y-4">
-              <div className="border border-border rounded-lg p-5">
-                <h4 className="font-bold text-sm mb-2">Procédure de Réponse à un Ransomware (Runbook A-1)</h4>
-                <p className="text-xs text-text-muted leading-relaxed">
-                  Dès qu'une alerte Ransomware critique est levée (Score ≥ 80), le Cerveau EDR calcule le PID suspect le plus actif. 
-                  L'Agent PowerShell déployé applique immédiatement une frappe chirurgicale en stoppant le PID. 
-                  Si le malware continue d'écrire des fichiers à forte entropie, l'analyste SOC doit cliquer sur le bouton **Isoler la machine** 
-                  dans l'onglet **Terminaux** pour neutraliser tout mouvement latéral ou exfiltration de données.
-                </p>
-              </div>
+          <div className="space-y-6">
+            <div className="panel space-y-6">
+              <h3 className="panel-title">EDR SOC Runbooks & Procédures d'Urgence</h3>
+              
+              <div className="space-y-4">
+                {/* Runbook A-1 */}
+                <div className="border border-border rounded-lg p-5">
+                  <h4 className="font-bold text-sm mb-2 text-brand-danger">Procédure de Réponse à un Ransomware (Runbook A-1)</h4>
+                  <p className="text-xs text-text-muted leading-relaxed mb-3">
+                    Dès qu'une alerte Ransomware critique est levée par les moteurs de détection (score de suspicion supérieur ou égal à 80), l'EDR initie automatiquement la réponse chirurgicale.
+                  </p>
+                  <ol className="list-decimal pl-5 text-xs text-text-muted space-y-1.5">
+                    <li><strong>Isolation du processus</strong> : Le Cerveau EDR identifie le PID du processus coupable et ordonne sa fermeture immédiate à l'Agent PowerShell via la commande <code>Stop-Process -Id &lt;PID&gt; -Force</code>.</li>
+                    <li><strong>Vérification de la neutralisation</strong> : L'analyste SOC doit vérifier dans l'onglet <strong>Journal des Réponses</strong> que le statut indique <strong>SUCCESS</strong>.</li>
+                    <li><strong>Confinement complémentaire</strong> : Si le malware persiste ou si des processus enfants non identifiés continuent de générer du trafic d'écriture, l'analyste doit immédiatement basculer vers le <strong>Runbook A-2</strong> pour isoler la machine.</li>
+                  </ol>
+                </div>
 
-              <div className="border border-border rounded-lg p-5">
-                <h4 className="font-bold text-sm mb-2">Signification des Features Comportementales</h4>
-                <p className="text-xs text-text-muted leading-relaxed">
-                  L'EDR surveille 12 features système fondamentales. Les plus importantes pour le Ransomware sont l'entropie de Shannon
-                  des noms de fichiers (détecte les extensions chiffrées/aléatoires) et le nombre de créations de fichiers (Event ID 11).
-                </p>
+                {/* Runbook A-2 */}
+                <div className="border border-border rounded-lg p-5">
+                  <h4 className="font-bold text-sm mb-2 text-brand-warning">Protocole d'Isolation Réseau et Rétablissement (Runbook A-2)</h4>
+                  <p className="text-xs text-text-muted leading-relaxed mb-3">
+                    L'isolation réseau est ordonnée pour couper les mouvements latéraux (mouvements du virus vers d'autres serveurs) ou l'exfiltration de fichiers par un canal C2.
+                  </p>
+                  <ul className="list-disc pl-5 text-xs text-text-muted space-y-1.5">
+                    <li><strong>Activation de l'isolation</strong> : Depuis l'onglet <strong>Terminaux</strong>, cliquez sur <strong>Isoler la machine</strong>. Cela déploie instantanément des règles de pare-feu restrictives bloquant toutes les entrées/sorties, sauf le port de contrôle <code>8000</code>.</li>
+                    <li><strong>Levée de l'isolation (Déconfinement)</strong> : Une fois la machine nettoyée et le malware supprimé, la levée de l'isolation s'effectue en réinitialisant le pare-feu local Windows depuis la console d'administration.</li>
+                  </ul>
+                </div>
+
+                {/* Runbook A-3 */}
+                <div className="border border-border rounded-lg p-5">
+                  <h4 className="font-bold text-sm mb-2 text-brand-primary">Gestion des Faux Positifs et Whitelisting (Runbook A-3)</h4>
+                  <p className="text-xs text-text-muted leading-relaxed mb-3">
+                    Lorsqu'un outil métier légitime (compilation de code, sauvegarde massive) déclenche des Z-scores critiques, l'analyste doit ajouter une exception :
+                  </p>
+                  <ul className="list-disc pl-5 text-xs text-text-muted space-y-1.5">
+                    <li><strong>Qualification</strong> : Vérifier dans l'onglet <strong>Alertes</strong> la légitimité du chemin du binaire et son éditeur.</li>
+                    <li><strong>Ajout de l'exclusion</strong> : Se rendre sur l'onglet <strong>Règles d'Exclusion</strong>, choisir le type (Dossier ou Processus), entrer le chemin complet et enregistrer pour le soustraire à l'analyse.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="panel space-y-6">
+              <h3 className="panel-title">Dictionnaire des 12 Features Système</h3>
+              <div className="table-container">
+                <table className="custom-table text-xs">
+                  <thead>
+                    <tr>
+                      <th>Feature</th>
+                      <th>Catégorie</th>
+                      <th>Event ID Sysmon associé</th>
+                      <th>Utilité de détection</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="font-semibold">nb_files_created</td>
+                      <td>Fichiers</td>
+                      <td>Event 11 (File Create)</td>
+                      <td>Mesure le taux d'écriture de masse du ransomware.</td>
+                    </tr>
+                    <tr>
+                      <td className="font-semibold">entropy_filenames</td>
+                      <td>Fichiers</td>
+                      <td>Calculé à la volée</td>
+                      <td>Détecte le bruit de codage aléatoire des extensions (.encrypted).</td>
+                    </tr>
+                    <tr>
+                      <td className="font-semibold">nb_child_processes</td>
+                      <td>Processus</td>
+                      <td>Event 1 (Process Create)</td>
+                      <td>Détecte l'exécution d'utilitaires malveillants comme vssadmin.exe.</td>
+                    </tr>
+                    <tr>
+                      <td className="font-semibold">nb_external_connections</td>
+                      <td>Réseau</td>
+                      <td>Event 3 (Network Connect)</td>
+                      <td>Surveille l'exfiltration de clés ou les connexions C2.</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
