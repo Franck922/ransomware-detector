@@ -1134,7 +1134,7 @@ export default function App() {
 
                 <div className="border border-border rounded-2xl p-5 bg-red-50 flex flex-col space-y-3 border-l-4 border-l-brand-danger shadow-sm">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-brand-danger bg-brand-dangerGlow px-2 py-0.5 rounded-full">Score >= 80</span>
+                    <span className="text-[10px] font-bold text-brand-danger bg-brand-dangerGlow px-2 py-0.5 rounded-full">Score &gt;= 80</span>
                     <span className="text-lg">🔥</span>
                   </div>
                   <h4 className="font-bold text-sm text-text-main">Riposte Active (KILL)</h4>
