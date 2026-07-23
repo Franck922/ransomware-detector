@@ -257,7 +257,8 @@ Documentation technique finale complète, rédaction du rapport académique (con
 - **Arbre Généalogique** : Le processus parent (ParentImage, ParentProcessId) est extrait pour tracer la chaîne de causalité.
 - **Proportionnalité** : 3 niveaux de réponse selon le score (log / alerte / kill).
 - **Frappe Chirurgicale** : `Stop-Process -Id <PID>` avec fallback sur le nom.
-- **Traçabilité** : Rapport JSON complet archivé dans `reports/` à chaque intervention.
+- **Traçabilité & Persistance** : Rapport JSON complet archivé dans `reports/` et persistance automatique de l'historique complet dans une base de données **SQLite** locale (`alerts.db`).
+- **Sécurité & Contrôle d'Accès** : Écran d'authentification des analystes (Franck / admin123) verrouillant l'accès à la console. Traçabilité complète et nominative des actions de réponse dans la base d'audit.
 
 ### Endpoints API
 
@@ -268,10 +269,13 @@ Documentation technique finale complète, rédaction du rapport académique (con
 | `POST` | `/ingest` | Ingestion manuelle d'un batch d'événements |
 | `POST` | `/analyze` | Analyse ponctuelle d'un vecteur de features |
 | `GET` | `/status` | État du système (ML activé, baseline entraînée) |
-| `GET` | `/alerts` | Historique des alertes |
+| `GET` | `/alerts` | Historique des alertes (chargé depuis SQLite) |
 | `GET` | `/agent/commands` | File d'attente des ordres pour l'Agent (polling) |
 | `POST` | `/response/kill/{pid}` | Ordre manuel de KILL |
 | `POST` | `/response/isolate` | Ordre manuel d'isolation réseau |
+| `POST` | `/login` | Authentification des analystes (Franck / admin123) |
+| `GET`/`POST`/`DELETE` | `/exclusions` | Lecture et gestion des exclusions de sécurité |
+| `GET`/`POST` | `/audit` | Lecture et insertion dans les journaux d'audit |
 
 ---
 

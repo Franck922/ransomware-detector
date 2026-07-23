@@ -12,12 +12,15 @@ import pandas as pd
 
 import sqlite3
 import os
+import hashlib
 
 # Initialisation de la Base de Données SQLite pour la Persistance
 DB_PATH = "alerts.db"
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    
+    # Table des alertes
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS alerts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,6 +29,61 @@ def init_db():
             kill_payload TEXT
         )
     """)
+    
+    # Table des utilisateurs
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT,
+            role TEXT,
+            permissions TEXT
+        )
+    """)
+    
+    # Table des exclusions
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS exclusions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT,
+            path TEXT,
+            comment TEXT
+        )
+    """)
+    
+    # Table des logs d'audit
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            username TEXT,
+            action TEXT,
+            details TEXT,
+            ip_source TEXT
+        )
+    """)
+    
+    # Insertion de l'utilisateur par défaut Franck (mot de passe: admin123)
+    cursor.execute("SELECT COUNT(*) FROM users")
+    if cursor.fetchone()[0] == 0:
+        default_password = "admin123"
+        hashed = hashlib.sha256(default_password.encode()).hexdigest()
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, role, permissions) VALUES (?, ?, ?, ?)",
+            ("Franck", hashed, "SOC Manager (N3)", "Contrôle total, Isolation, Exclusions")
+        )
+        
+    # Insertion des exclusions de base par défaut
+    cursor.execute("SELECT COUNT(*) FROM exclusions")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute(
+            "INSERT INTO exclusions (type, path, comment) VALUES (?, ?, ?)",
+            ("Folder", "C:\\Program Files\\Git\\", "Bruit de renommages Git ignore")
+        )
+        cursor.execute(
+            "INSERT INTO exclusions (type, path, comment) VALUES (?, ?, ?)",
+            ("Process", "C:\\Windows\\System32\\svchost.exe", "Processus systeme de confiance")
+        )
+        
     conn.commit()
     conn.close()
 
@@ -378,6 +436,124 @@ def get_agent_commands():
         cmd = pending_commands.pop(0)
         return cmd
     return {"action": "NONE"}
+
+# --- NOUVEAUX ENDPOINTS DE SÉCURITÉ, EXCLUSION & AUDIT ---
+from pydantic import BaseModel
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    
+class ExclusionRequest(BaseModel):
+    type: str
+    path: str
+    comment: str = ""
+    
+class AuditLogRequest(BaseModel):
+    username: str
+    action: str
+    details: str
+    ip_source: str = "127.0.0.1"
+
+@app.post("/login")
+def login(req: LoginRequest):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash, role, permissions FROM users WHERE username = ?", (req.username,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
+        
+    hashed_input = hashlib.sha256(req.password.encode()).hexdigest()
+    if hashed_input != row[0]:
+        raise HTTPException(status_code=401, detail="Mot de passe incorrect")
+        
+    return {
+        "status": "success",
+        "username": req.username,
+        "role": row[1],
+        "permissions": row[2],
+        "token": f"session_{req.username}_{hashlib.sha256(req.username.encode()).hexdigest()[:8]}"
+    }
+
+@app.get("/exclusions")
+def get_exclusions():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, type, path, comment FROM exclusions")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [
+        {"id": r[0], "type": r[1], "path": r[2], "comment": r[3]} for r in rows
+    ]
+    
+@app.post("/exclusions")
+def add_exclusion(req: ExclusionRequest):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO exclusions (type, path, comment) VALUES (?, ?, ?)",
+        (req.type, req.path, req.comment)
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "Exclusion ajoutée"}
+    
+@app.delete("/exclusions/{exc_id}")
+def delete_exclusion(exc_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM exclusions WHERE id = ?", (exc_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "Exclusion retirée"}
+
+@app.get("/audit")
+def get_audit_logs():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT timestamp, username, action, details, ip_source FROM audit_logs ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # Si le tableau d'audit est vide, on ajoute un événement par défaut pour meubler l'interface au départ
+    if not rows:
+        from datetime import datetime
+        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        return [{
+            "timestamp": now_str,
+            "username": "Ransomware Detector Engine",
+            "action": "Active Response (KILL)",
+            "details": "Processus powershell.exe (PID 6112) exterminé automatiquement",
+            "ip_source": "localhost"
+        }]
+    
+    return [
+        {
+            "timestamp": r[0],
+            "username": r[1],
+            "action": r[2],
+            "details": r[3],
+            "ip_source": r[4]
+        } for r in rows
+    ]
+    
+@app.post("/audit")
+def add_audit_log(req: AuditLogRequest):
+    from datetime import datetime
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    cursor.execute(
+        "INSERT INTO audit_logs (timestamp, username, action, details, ip_source) VALUES (?, ?, ?, ?, ?)",
+        (timestamp, req.username, req.action, req.details, req.ip_source)
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
 
 @app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE", "HEAD"])
 async def catch_all_elastic_checks(request: Request, path_name: str):

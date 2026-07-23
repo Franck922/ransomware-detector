@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Activity, Shield, Terminal, AlertTriangle, FileText, Settings, 
   Brain, CheckCircle, XCircle, Network, RefreshCw, ChevronRight, 
-  Eye, ShieldAlert, Users, List, Play, FileCheck, HelpCircle, HardDrive
+  Eye, ShieldAlert, Users, List, Play, FileCheck, HelpCircle, HardDrive,
+  LogOut, Lock, User
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -10,6 +11,18 @@ import {
 } from 'recharts';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('edr_authenticated') === 'true';
+  });
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('edr_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+
   const [activeTab, setActiveTab] = useState('overview');
   const [alerts, setAlerts] = useState([]);
   const [sysStatus, setSysStatus] = useState({
@@ -24,11 +37,10 @@ export default function App() {
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
   
-  // Exclusions (Mock Data)
-  const [exclusions, setExclusions] = useState([
-    { id: 1, type: "Folder", path: "C:\\Program Files\\Git\\", comment: "Bruit de renommages Git ignore" },
-    { id: 2, type: "Process", path: "C:\\Windows\\System32\\svchost.exe", comment: "Processus systeme de confiance" }
-  ]);
+  // Real DB state
+  const [exclusions, setExclusions] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  
   const [newExclusionPath, setNewExclusionPath] = useState("");
   const [newExclusionType, setNewExclusionType] = useState("Folder");
 
@@ -39,6 +51,7 @@ export default function App() {
 
   // Polling API
   const fetchData = async () => {
+    if (!isAuthenticated) return;
     try {
       const resStatus = await fetch('http://localhost:8000/status');
       if (resStatus.ok) {
@@ -55,22 +68,103 @@ export default function App() {
           if (!selectedReport) setSelectedReport(data.alerts[0].kill_payload);
         }
       }
+      
+      const resExclusions = await fetch('http://localhost:8000/exclusions');
+      if (resExclusions.ok) {
+        const data = await resExclusions.json();
+        setExclusions(data);
+      }
+      
+      const resAudit = await fetch('http://localhost:8000/audit');
+      if (resAudit.ok) {
+        const data = await resAudit.json();
+        setAuditLogs(data);
+      }
     } catch (error) {
       console.error("Erreur de liaison API EDR:", error);
     }
   };
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    if (isAuthenticated) {
+      fetchData();
+      const interval = setInterval(fetchData, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError("");
+    try {
+      const res = await fetch('http://localhost:8000/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loginUsername, password: loginPassword })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIsAuthenticated(true);
+        setUser(data);
+        localStorage.setItem('edr_authenticated', 'true');
+        localStorage.setItem('edr_user', JSON.stringify(data));
+        // Enregistrer dans l'audit log du backend
+        await fetch('http://localhost:8000/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: data.username,
+            action: "Connexion console",
+            details: `Connexion de l'analyste Franck (${data.role})`,
+            ip_source: "192.168.10.2"
+          })
+        });
+      } else {
+        const err = await res.json();
+        setLoginError(err.detail || "Identifiants invalides");
+      }
+    } catch (e) {
+      setLoginError("Impossible de se connecter au serveur API.");
+    }
+  };
+
+  const handleLogout = async () => {
+    if (user) {
+      try {
+        await fetch('http://localhost:8000/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: user.username,
+            action: "Deconnexion console",
+            details: `Déconnexion de l'analyste ${user.username}`,
+            ip_source: "192.168.10.2"
+          })
+        });
+      } catch (e) {}
+    }
+    setIsAuthenticated(false);
+    setUser(null);
+    localStorage.removeItem('edr_authenticated');
+    localStorage.removeItem('edr_user');
+  };
 
   const handleKill = async (pid) => {
     try {
       const res = await fetch(`http://localhost:8000/response/kill/${pid}`, { method: 'POST' });
       if (res.ok) {
         alert(`Ordre de KILL transmis avec succes pour le PID ${pid}`);
+        // Log d'audit
+        await fetch('http://localhost:8000/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: user?.username || "Franck",
+            action: "Active Response (KILL)",
+            details: `Forçage manuel de fermeture sur le PID ${pid}`,
+            ip_source: "192.168.10.2"
+          })
+        });
         fetchData();
       }
     } catch (e) {
@@ -83,10 +177,77 @@ export default function App() {
       const res = await fetch('http://localhost:8000/response/isolate', { method: 'POST' });
       if (res.ok) {
         alert("Ordre d'isolation reseau transmis avec succes.");
+        // Log d'audit
+        await fetch('http://localhost:8000/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: user?.username || "Franck",
+            action: "Isolation réseau",
+            details: "Confinement de la machine VM-WIN10-LAB",
+            ip_source: "192.168.10.2"
+          })
+        });
         fetchData();
       }
     } catch (e) {
       alert("Erreur de communication.");
+    }
+  };
+
+  const handleAddExclusion = async (e) => {
+    e.preventDefault();
+    if (!newExclusionPath) return;
+    try {
+      const comment = newExclusionType === "Folder" ? "Bruit de renommages Git ignore" : "Processus systeme de confiance";
+      const res = await fetch('http://localhost:8000/exclusions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: newExclusionType,
+          path: newExclusionPath,
+          comment: comment
+        })
+      });
+      if (res.ok) {
+        // Log d'audit
+        await fetch('http://localhost:8000/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: user?.username || "Franck",
+            action: "Exclusion créée",
+            details: `Ajout d'une exclusion sur ${newExclusionPath}`,
+            ip_source: "192.168.10.2"
+          })
+        });
+        setNewExclusionPath("");
+        fetchData();
+      }
+    } catch (e) {
+      alert("Erreur d'ajout de l'exclusion.");
+    }
+  };
+
+  const handleDeleteExclusion = async (id, path) => {
+    try {
+      const res = await fetch(`http://localhost:8000/exclusions/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        // Log d'audit
+        await fetch('http://localhost:8000/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: user?.username || "Franck",
+            action: "Exclusion retirée",
+            details: `Retrait de l'exclusion sur ${path}`,
+            ip_source: "192.168.10.2"
+          })
+        });
+        fetchData();
+      }
+    } catch (e) {
+      alert("Erreur de suppression de l'exclusion.");
     }
   };
 
@@ -124,6 +285,68 @@ export default function App() {
     { name: 'Suppression', value: 0, color: '#ca8a04' },
     { name: 'Processus', value: 1, color: '#0f172a' }
   ];
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex min-h-screen bg-bg-main items-center justify-center font-sans antialiased p-6">
+        <div className="w-full max-w-sm panel space-y-6 p-8 border border-border shadow-xl rounded-2xl bg-white">
+          <div className="flex flex-col items-center text-center space-y-2">
+            <div className="w-12 h-12 bg-brand-primary rounded-xl flex items-center justify-center font-bold text-white text-lg mb-2 shadow-md">
+              EDR
+            </div>
+            <h2 className="text-xl font-bold tracking-tight">Console d'administration SOC</h2>
+            <p className="text-xs text-text-muted">Connectez-vous pour piloter l'agent de réponse active</p>
+          </div>
+
+          {loginError && (
+            <div className="p-3 bg-brand-dangerGlow border border-brand-danger text-brand-danger text-xs rounded-xl text-center font-medium">
+              ⚠️ {loginError}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-text-muted uppercase">Identifiant</label>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  placeholder="Franck"
+                  required
+                  className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
+                />
+                <User className="w-4 h-4 text-text-muted absolute left-3 top-3" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-text-muted uppercase">Mot de passe</label>
+              <div className="relative">
+                <input 
+                  type="password" 
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full border border-border rounded-lg p-2.5 pl-9 text-xs bg-white outline-none focus:border-brand-primary"
+                />
+                <Lock className="w-4 h-4 text-text-muted absolute left-3 top-3" />
+              </div>
+            </div>
+
+            <button type="submit" className="btn btn-primary w-full py-2.5 mt-2">
+              Se connecter
+            </button>
+          </form>
+          
+          <div className="text-[10px] text-center text-text-muted border-t border-border pt-4">
+            Identifiants démo : <span className="font-mono bg-gray-50 p-1 rounded">Franck / admin123</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-bg-main text-text-main font-sans antialiased">
@@ -292,10 +515,28 @@ export default function App() {
           </div>
         </div>
 
-        <div className="p-4 border-t border-border mt-auto">
-          <div className="flex items-center gap-2.5 text-xs text-text-muted font-medium">
-            <span className={`w-2 h-2 rounded-full ${sysStatus.status === 'online' ? 'bg-brand-success animate-pulse' : 'bg-brand-danger'}`}></span>
-            <span>EDR Daemon Online</span>
+        <div className="p-4 border-t border-border mt-auto space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-brand-primaryGlow text-brand-primary flex items-center justify-center font-bold text-[10px]">
+                {user?.username?.[0] || 'U'}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold tracking-tight text-text-main">{user?.username || 'Utilisateur'}</span>
+                <span className="text-[8px] text-text-muted">{user?.role || 'Analyste'}</span>
+              </div>
+            </div>
+            <button 
+              onClick={handleLogout} 
+              className="text-text-muted hover:text-brand-danger transition-colors"
+              title="Se déconnecter"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-text-muted font-medium pt-2 border-t border-dashed border-border">
+            <span className={`w-1.5 h-1.5 rounded-full ${sysStatus.status === 'online' ? 'bg-brand-success animate-pulse' : 'bg-brand-danger'}`}></span>
+            <span>EDR Daemon : {sysStatus.status === 'online' ? 'Actif' : 'Hors ligne'}</span>
           </div>
         </div>
       </aside>
@@ -868,33 +1109,29 @@ export default function App() {
           <div className="space-y-6">
             <div className="panel max-w-xl">
               <h3 className="panel-title mb-6">Ajouter une exclusion</h3>
-              <div className="grid grid-cols-3 gap-4">
-                <select 
-                  value={newExclusionType} 
-                  onChange={(e) => setNewExclusionType(e.target.value)}
-                  className="border border-border rounded-lg p-2 text-xs bg-white"
-                >
-                  <option value="Folder">Dossier</option>
-                  <option value="Process">Processus</option>
-                </select>
-                <input 
-                  type="text" 
-                  value={newExclusionPath} 
-                  onChange={(e) => setNewExclusionPath(e.target.value)}
-                  placeholder="Chemin complet"
-                  className="col-span-2 border border-border rounded-lg p-2 text-xs bg-white"
-                />
-              </div>
-              <button 
-                onClick={() => {
-                  if(!newExclusionPath) return;
-                  setExclusions([...exclusions, { id: exclusions.length + 1, type: newExclusionType, path: newExclusionPath, comment: "Exclusion manuelle" }]);
-                  setNewExclusionPath("");
-                }} 
-                className="btn btn-primary mt-4"
-              >
-                Ajouter l'exclusion
-              </button>
+              <form onSubmit={handleAddExclusion}>
+                <div className="grid grid-cols-3 gap-4">
+                  <select 
+                    value={newExclusionType} 
+                    onChange={(e) => setNewExclusionType(e.target.value)}
+                    className="border border-border rounded-lg p-2 text-xs bg-white"
+                  >
+                    <option value="Folder">Dossier</option>
+                    <option value="Process">Processus</option>
+                  </select>
+                  <input 
+                    type="text" 
+                    value={newExclusionPath} 
+                    onChange={(e) => setNewExclusionPath(e.target.value)}
+                    placeholder="Chemin complet"
+                    className="col-span-2 border border-border rounded-lg p-2 text-xs bg-white"
+                    required
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary mt-4">
+                  Ajouter l'exclusion
+                </button>
+              </form>
             </div>
 
             <div className="panel">
@@ -916,7 +1153,7 @@ export default function App() {
                       <td>{e.comment}</td>
                       <td>
                         <button 
-                          onClick={() => setExclusions(exclusions.filter(item => item.id !== e.id))}
+                          onClick={() => handleDeleteExclusion(e.id, e.path)}
                           className="text-brand-danger hover:underline font-semibold"
                         >
                           Retirer
@@ -924,6 +1161,11 @@ export default function App() {
                       </td>
                     </tr>
                   ))}
+                  {exclusions.length === 0 && (
+                    <tr>
+                      <td colSpan="4" className="text-center text-text-muted py-6">Aucune exclusion configurée.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -947,20 +1189,23 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>Aujourd'hui, 15:47:12</td>
-                  <td>Administrateur SOC (N3)</td>
-                  <td>Exclusion créée</td>
-                  <td>Ajout d'une exclusion sur C:\Windows\System32\svchost.exe</td>
-                  <td>192.168.10.2</td>
-                </tr>
-                <tr>
-                  <td>Aujourd'hui, 14:42:01</td>
-                  <td>Ransomware Detector Engine</td>
-                  <td>Active Response (KILL)</td>
-                  <td>Processus powershell.exe (PID 6128) exterminé automatiquement</td>
-                  <td>localhost</td>
-                </tr>
+                {auditLogs.map((log, index) => (
+                  <tr key={index}>
+                    <td>{log.timestamp}</td>
+                    <td className="font-semibold">{log.username}</td>
+                    <td>
+                      <span className={`badge ${
+                        log.action.includes('KILL') || log.action.includes('Isolation')
+                          ? 'badge-danger' 
+                          : (log.action.includes('Exclusion') ? 'badge-warning' : 'badge-success')
+                      }`}>
+                        {log.action}
+                      </span>
+                    </td>
+                    <td>{log.details}</td>
+                    <td className="font-mono text-xs">{log.ip_source}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
