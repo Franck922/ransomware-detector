@@ -316,10 +316,25 @@ Set-ExecutionPolicy Unrestricted -Force
 .\agent_ps.ps1
 ```
 
-### 6. Déploiement Docker (production)
-```bash
-docker-compose up
-```
+### 6. Déploiement Conteneurisé avec Docker 🐳 (Recommandé)
+
+Pour déployer l'intégralité du SOC EDR (API FastAPI + Console React servie par Nginx) en une seule ligne de commande sans configurer Python ou Node.js sur votre machine hôte :
+
+1. S'assurer que le dossier `dashboard/dist` est bien compilé (exécuter `npm run build` dans le dossier `/dashboard` au préalable si nécessaire pour générer les fichiers de production).
+2. Démarrer les services avec Docker Compose :
+   ```bash
+   docker-compose up -d --build
+   ```
+3. Accéder aux services :
+   * **Console SOC (Dashboard React + Nginx)** : [http://localhost:8080](http://localhost:8080)
+   * **API de contrôle EDR (FastAPI)** : [http://localhost:8000](http://localhost:8000) (ou swagger sur [http://localhost:8000/docs](http://localhost:8000/docs))
+4. Pour arrêter les conteneurs proprement :
+   ```bash
+   docker-compose down
+   ```
+
+> [!TIP]
+> **Persistance SQLite** : La base de données SQLite `alerts.db` est montée en volume (`- ./alerts.db:/app/alerts.db`) afin de préserver définitivement vos alertes, exclusions, comptes d'analystes et logs d'audit sur votre machine physique hôte, même après l'arrêt ou la recréation des conteneurs.
 
 ---
 

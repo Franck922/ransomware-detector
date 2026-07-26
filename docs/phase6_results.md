@@ -88,7 +88,55 @@ Connecté directement aux routes `/exclusions` de l'API :
 
 ---
 
-## 4. Tests et Validation
+## 4. Déploiement Conteneurisé (Docker & Docker Compose)
+
+Afin d'industrialiser le déploiement et de rendre l'application portable sur n'importe quelle machine (sans nécessiter l'installation de Python, Node.js ou npm localement), nous avons mis en place une conteneurisation complète.
+
+### 4.1 Conteneurisation de l'API (Backend)
+Le `Dockerfile` à la racine s'appuie sur une image ultra-légère `python:3.11-slim` :
+* Il copie les dépendances (`requirements.txt`).
+* Installe les bibliothèques requises (`fastapi`, `uvicorn`, `sqlite3`, etc.).
+* Expose le port **`8000`** et démarre le serveur de manière asynchrone avec Uvicorn.
+
+### 4.2 Conteneurisation du Dashboard (Frontend)
+Le Dashboard React est déployé dans un serveur web **Nginx** (via l'image officielle `nginx:alpine`) :
+* Il sert statiquement le dossier de build de production `./dashboard/dist` sur le port **`8080`** de la machine hôte.
+
+### 4.3 Orchestration avec Docker Compose
+Le fichier `docker-compose.yml` orchestre et configure ces deux conteneurs :
+```yaml
+services:
+  api:
+    build: .
+    container_name: edr-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./reports:/app/reports
+      - ./alerts.db:/app/alerts.db
+    restart: unless-stopped
+
+  dashboard:
+    image: nginx:alpine
+    container_name: edr-dashboard
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dashboard/dist:/usr/share/nginx/html
+    restart: unless-stopped
+    depends_on:
+      - api
+```
+
+#### Points Clés de Sécurité & Fiabilité dans le Compose :
+* **Persistance SQLite** : Montage de volume `- ./alerts.db:/app/alerts.db`. Cela garantit que la base de données SQLite physique reste stockée sur la machine hôte. Si les conteneurs sont mis à jour, arrêtés ou recréés, les comptes utilisateurs, les exclusions et les logs d'audit ne sont jamais perdus.
+* **Synchronisation** : L'option `depends_on` force le conteneur API à démarrer avant le Dashboard.
+
+---
+
+## 5. Tests et Validation
 * **Création de Compte :** Inscription réussie de profils alternatifs et reconnexion avec les droits correspondants.
-* **Persistance après Reboot :** Après arrêt et redémarrage du backend FastAPI, l'historique complet des alertes et les exclusions définies sont parfaitement préservés.
+* **Persistance après Reboot :** Après arrêt et redémarrage du backend FastAPI (ou des conteneurs Docker), l'historique complet des alertes et les exclusions définies sont parfaitement préservés.
 * **Journalisation :** Chaque action de blocage manuel (Kill) ou d'isolation réseau initiée depuis le Dashboard écrit instantanément une trace d'audit nominative en base SQLite.
+* **Déploiement Docker :** Tout le serveur EDR démarre en une seule ligne de commande (`docker-compose up -d --build`) et est directement accessible sur l'hôte.
