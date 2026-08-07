@@ -338,24 +338,62 @@ Pour déployer l'intégralité du SOC EDR (API FastAPI + Console React servie pa
 
 ---
 
-## 📖 Guide d'utilisation
+## 📖 Guide d'utilisation & Intégration (VM Windows <──> Docker Hôte)
 
-### Scénario de test End-to-End
+Pour faire fonctionner l'ensemble du laboratoire EDR chez vous (ou pour le faire tourner auprès de votre encadreur/membres du groupe) :
 
-1. **Démarrer l'API** sur le PC hôte (`uvicorn api.main:app --host 0.0.0.0 --port 8000`)
-2. **Attendre la calibration** : L'API affichera `Baseline calculée ! Le système passe en mode DÉTECTION` après 10 fenêtres de 10s.
-3. **Lancer l'Agent** sur la VM (`.\agent_ps.ps1`)
-4. **Déclencher l'attaque** sur la VM dans un second terminal (`.\simulate_ransomware_v2.ps1`)
-5. **Observer** :
-   - Sur l'API : `ALERTE CRITIQUE : Ransomware Détecté (Score: 241) par RulesEngine`
-   - Sur l'Agent : Affichage du bloc `EDR RESPONSE` avec les preuves et `SUCCESS : Process terminated`
-   - Sur le disque : Un rapport JSON dans `reports/`
+### 1. Démarrer la stack Docker (sur l'Hôte physique)
+```bash
+docker-compose up -d --build
+```
+*Votre console SOC sera accessible sur `http://localhost:8080` (Identifiants : `franck@soc.edr.local` / `admin123`).*
 
-### Le Simulateur V2 (APT)
-Le simulateur reproduit 3 tactiques MITRE ATT&CK :
-- **T1071** — Connexion C2 (Invoke-WebRequest)
-- **T1490** — Inhibition de la restauration (vssadmin.exe)
-- **T1486** — Chiffrement massif (500 fichiers à forte entropie)
+### 2. Récupérer l'IP réseau Host-Only de votre Hôte
+Pour que la VM puisse envoyer ses logs au serveur Docker et recevoir les commandes de riposte :
+* **Sous Windows** : Lancer `ipconfig` dans un terminal et noter l'adresse IPv4 de la carte réseau virtuelle (ex: VMnet1 / Host-Only), typiquement `192.168.10.1` ou `192.168.10.2`.
+* **Sous Linux/macOS** : Lancer `ip a` ou `ifconfig` et noter l'adresse de la carte correspondante.
+
+### 3. Configurer et démarrer la VM Windows (Sensor & Agent)
+
+#### A. Rediriger l'expédition de logs (Winlogbeat)
+Sur la VM Windows, éditez le fichier de configuration de Winlogbeat (généralement `C:\Program Files\Winlogbeat\winlogbeat.yml`) et modifiez l'IP de destination pour pointer vers le serveur API Docker de l'hôte (port 8000) :
+```yaml
+output.elasticsearch:
+  hosts: ["http://<IP_RESEAU_DE_L_HOTE>:8000"]
+```
+*Redémarrez ensuite le service Winlogbeat : `Restart-Service winlogbeat`.*
+
+#### B. Lancer l'Agent de Réponse EDR (sur la VM)
+1. Ouvrez le fichier script `agent_ps.ps1` (ou `agent.ps1`) présent dans le dossier `/agent`.
+2. Assurez-vous que l'adresse URL du serveur pointe vers l'hôte :
+   ```powershell
+   $ServerUrl = "http://<IP_RESEAU_DE_L_HOTE>:8000"
+   ```
+3. Lancez l'agent dans une console PowerShell en tant qu'Administrateur :
+   ```powershell
+   Set-ExecutionPolicy Bypass -Scope Process -Force
+   .\agent_ps.ps1
+   ```
+   *(Vous devriez voir l'agent passer en statut actif et interroger le serveur toutes les 2 secondes).*
+
+### 4. Simuler l'attaque de Ransomware
+Sur la VM Windows, dans une autre console PowerShell en tant qu'Administrateur, lancez le simulateur d'attaque :
+```powershell
+.\simulate_ransomware_v2.ps1
+```
+
+### 5. Observer la Riposte Active
+* Le simulateur va commencer ses actions (création massive de fichiers chiffrés, suppression des Shadow Copies, requêtes DNS suspectes).
+* L'API Docker va corréler ces logs (le score heuristique et ML va grimper et dépasser 80 points).
+* L'ordre de **KILL** va être généré sur l'API, récupéré par l'agent PowerShell sur la VM en moins de 2 secondes, qui va exterminer automatiquement le processus malveillant du simulateur.
+* Vous verrez l'alerte rouge et la trace d'audit nominative apparaître en direct sur le Dashboard SOC à l'adresse `http://localhost:8080`.
+
+---
+## 🎯 Le Simulateur V2 (APT)
+Le simulateur reproduit fidèlement 3 tactiques MITRE ATT&CK :
+- **T1071** — Connexion C2 (via Invoke-WebRequest de test réseau)
+- **T1490** — Inhibition de la restauration système (via exécution de vssadmin.exe)
+- **T1486** — Chiffrement massif (génération de 500 fichiers à forte entropie .locked)
 
 ---
 
