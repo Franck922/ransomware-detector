@@ -7,7 +7,7 @@
 # preuves contextuelles.
 # ==============================================================================
 
-$API_URL = "http://192.168.10.2:8000"
+$API_URL = "http://192.168.10.1:8000"
 
 Write-Host "==============================================" -ForegroundColor DarkCyan
 Write-Host "  AGENT EDR - DETECTION & REPONSE ACTIVE" -ForegroundColor Cyan

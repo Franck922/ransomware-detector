@@ -13,6 +13,7 @@ import pandas as pd
 import sqlite3
 import os
 import hashlib
+from datetime import datetime
 
 # Initialisation de la Base de Données SQLite pour la Persistance
 DB_PATH = "alerts.db"
@@ -284,8 +285,6 @@ def ingest_logs(payload: IngestPayload):
                                 logger.warning(f"🔨 Commande KILL pour PID {top_suspect.get('pid')} ajoutée à la file d'attente.")
                                 
                                 # Historisation de l'incident pour le Dashboard SOC (Phase 6)
-                                import os
-                                from datetime import datetime
                                 os.makedirs("reports", exist_ok=True)
                                 timestamp_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
                                 report_filename = f"reports/{timestamp_str}_{top_suspect.get('process_name', 'unknown')}.json"
