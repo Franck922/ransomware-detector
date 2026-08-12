@@ -97,19 +97,23 @@ export default function Docs() {
 
       <Section title="Procédure : suspicion de rançongiciel">
         <ol className="list-decimal list-inside space-y-1.5">
-          <li>Ouvrir l'alerte et vérifier le score, l'entropie et la chaîne de processus.</li>
           <li>
-            Cliquer sur <strong>Prendre en charge</strong> : les autres analystes voient
-            immédiatement que l'incident est traité, ce qui évite les actions concurrentes.
+            Depuis le <strong>Dashboard</strong>, ouvrir la <strong>file de triage</strong> (alertes
+            ouvertes non assignées, triées par score) et sélectionner l'incident le plus critique.
           </li>
           <li>
-            Si le chiffrement est confirmé, isoler le terminal avant toute autre action, afin de
-            couper la propagation et le canal de commande.
+            Sur la fiche d'alerte, lire la <strong>chronologie</strong> (parent → réseau → chiffrement
+            → détection) et les alertes <strong>corrélées</strong> sur le même terminal.
           </li>
-          <li>Arrêter le processus suspect, puis vérifier l'acquittement dans le journal des réponses.</li>
           <li>
-            Qualifier l'alerte (clôturée ou faux positif) avec une note de résolution ; elle est
-            partagée avec l'équipe et tracée dans l'audit.
+            En N2+, cliquer sur <strong>Confinement complet</strong> : prise en charge + arrêt du
+            PID + isolation réseau en une seule action tracée. Sinon, prendre en charge puis escalader
+            à un N2.
+          </li>
+          <li>Suivre le playbook à droite jusqu'à ce que toutes les étapes soient cochées.</li>
+          <li>
+            Vérifier l'acquittement dans le journal des réponses, puis qualifier l'alerte (clôturée
+            ou faux positif) avec une note de résolution.
           </li>
         </ol>
       </Section>

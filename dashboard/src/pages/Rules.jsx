@@ -70,7 +70,7 @@ export default function Rules() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
         <StatCard label="Règles actives" value={RULES.length} hint="Évaluées à chaque fenêtre" />
         <StatCard
           label="Seuil d'alerte"

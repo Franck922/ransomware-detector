@@ -84,8 +84,8 @@ export default function Exclusions({ onToast }) {
           title="Nouvelle exclusion"
           subtitle="Un chemin exclu ne génère plus aucune détection : à utiliser avec parcimonie"
         >
-          <form onSubmit={handleCreate} className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-2">
+          <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+            <div className="lg:col-span-2">
               <label htmlFor="type" className="stat-label block mb-1.5">
                 Type
               </label>
@@ -102,7 +102,7 @@ export default function Exclusions({ onToast }) {
                 ))}
               </select>
             </div>
-            <div className="col-span-5">
+            <div className="sm:col-span-2 lg:col-span-5">
               <label htmlFor="path" className="stat-label block mb-1.5">
                 Chemin ou motif
               </label>
@@ -116,7 +116,7 @@ export default function Exclusions({ onToast }) {
                 className="w-full px-3 py-2 rounded-lg border border-border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
               />
             </div>
-            <div className="col-span-3">
+            <div className="lg:col-span-3">
               <label htmlFor="comment" className="stat-label block mb-1.5">
                 Justification
               </label>
@@ -129,7 +129,7 @@ export default function Exclusions({ onToast }) {
                 className="w-full px-3 py-2 rounded-lg border border-border text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
               />
             </div>
-            <div className="col-span-2">
+            <div className="lg:col-span-2">
               <button type="submit" disabled={busy} className="btn btn-primary w-full disabled:opacity-50">
                 <Plus className="w-3.5 h-3.5" />
                 Ajouter

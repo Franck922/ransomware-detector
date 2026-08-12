@@ -159,6 +159,50 @@ class AlertStatusUpdate(BaseModel):
     resolution_note: Optional[str] = Field(default=None, max_length=2000)
 
 
+class TimelineEventOut(BaseModel):
+    """Étape d'une chronologie d'incident reconstruite côté serveur."""
+
+    at: datetime
+    kind: str
+    title: str
+    detail: Optional[str] = None
+    tone: str = "muted"
+    alert_id: Optional[int] = None
+    command_id: Optional[int] = None
+
+
+class PlaybookStepOut(BaseModel):
+    id: str
+    label: str
+    done: bool
+    required_role: Optional[str] = None
+    hint: Optional[str] = None
+
+
+class AlertInvestigationOut(BaseModel):
+    """Dossier d'investigation : chronologie, corrélation et playbook de réponse."""
+
+    alert: AlertOut
+    timeline: List[TimelineEventOut]
+    related: List[AlertOut]
+    playbook: List[PlaybookStepOut]
+    correlation_window_minutes: int = 15
+
+
+class ContainRequest(BaseModel):
+    kill: bool = True
+    isolate: bool = True
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class ContainOut(BaseModel):
+    alert: AlertOut
+    kill_command_id: Optional[int] = None
+    isolate_command_id: Optional[int] = None
+    already_isolated: bool = False
+    message: str
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Métriques / vue d'ensemble
 # ─────────────────────────────────────────────────────────────────────

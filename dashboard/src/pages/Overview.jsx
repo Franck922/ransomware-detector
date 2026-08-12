@@ -25,7 +25,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Activity, ShieldAlert, Users } from 'lucide-react';
+import { Activity, Inbox, ShieldAlert, Users } from 'lucide-react';
 import { alerts as alertsApi, metrics as metricsApi } from '../api/endpoints';
 import { useResource } from '../hooks/useResource';
 import {
@@ -36,6 +36,7 @@ import {
   StatCard,
   StatusBadge,
   formatDateTime,
+  formatRelative,
   formatTime,
 } from '../components/ui';
 
@@ -75,6 +76,20 @@ export default function Overview({ onOpenAlert }) {
     { channels: ['alerts'] },
   );
 
+  const triage = useResource(
+    (signal) =>
+      alertsApi.list(
+        {
+          open_only: true,
+          unassigned_only: true,
+          sort: 'score',
+          limit: 8,
+        },
+        signal,
+      ),
+    { channels: ['alerts'] },
+  );
+
   const data = overview.data;
   const riskTone = RISK_TONES[data?.risk_label] || RISK_TONES.Faible;
 
@@ -92,7 +107,7 @@ export default function Overview({ onOpenAlert }) {
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
         <StatCard
           label="Terminaux surveillés"
           value={data ? data.machines_total : '—'}
@@ -129,9 +144,9 @@ export default function Overview({ onOpenAlert }) {
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
         <Panel
-          className="col-span-2"
+          className="xl:col-span-2"
           title="Activité fichiers et entropie"
           subtitle={
             series.data
@@ -171,7 +186,8 @@ export default function Overview({ onOpenAlert }) {
             }
           >
             <>
-              <ResponsiveContainer width="100%" height={280}>
+              <div className="h-[220px] sm:h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 5, right: 8, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="filesGradient" x1="0" y1="0" x2="0" y2="1">
@@ -241,6 +257,7 @@ export default function Overview({ onOpenAlert }) {
                   />
                 </AreaChart>
               </ResponsiveContainer>
+              </div>
               {!hasActivity ? (
                 <p className="text-[10px] text-text-muted mt-2">
                   Aucune activité mesurée sur la fenêtre sélectionnée : la courbe est à zéro, ce
@@ -304,6 +321,70 @@ export default function Overview({ onOpenAlert }) {
           </Panel>
         </div>
       </div>
+
+      <Panel
+        title="File de triage SOC"
+        subtitle="Alertes ouvertes non assignées, triées par score — à traiter en priorité"
+        actions={
+          <span className="text-[10px] font-semibold text-text-muted">
+            {triage.data?.total ?? 0} en attente
+          </span>
+        }
+      >
+        <AsyncSection
+          loading={triage.loading}
+          error={triage.error}
+          onRetry={triage.reload}
+          isEmpty={(triage.data?.items || []).length === 0}
+          empty={
+            <EmptyState
+              title="File de triage vide"
+              description="Aucune alerte ouverte sans analyste. Les nouvelles détections apparaîtront ici."
+              icon={Inbox}
+            />
+          }
+        >
+          <div className="table-container">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Priorité</th>
+                  <th>Âge</th>
+                  <th>Terminal</th>
+                  <th>Processus</th>
+                  <th>Score</th>
+                  <th>Gravité</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(triage.data?.items || []).map((alert, index) => (
+                  <tr
+                    key={alert.id}
+                    onClick={() => onOpenAlert(alert.id)}
+                    className="cursor-pointer"
+                  >
+                    <td className="font-bold text-text-muted">#{index + 1}</td>
+                    <td className="whitespace-nowrap text-text-muted">
+                      {formatRelative(alert.detected_at)}
+                    </td>
+                    <td className="font-medium">{alert.machine_id || '—'}</td>
+                    <td>
+                      <span className="code-text">{alert.process_name || 'inconnu'}</span>
+                      {alert.pid ? (
+                        <span className="text-text-muted ml-1.5">PID {alert.pid}</span>
+                      ) : null}
+                    </td>
+                    <td className="font-bold">{alert.score}</td>
+                    <td>
+                      <SeverityBadge severity={alert.severity} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </AsyncSection>
+      </Panel>
 
       <Panel
         title="Dernières alertes"

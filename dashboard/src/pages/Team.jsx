@@ -152,8 +152,8 @@ export default function Team({ onToast }) {
             </button>
           }
         >
-          <form onSubmit={handleCreate} className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-3">
+          <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+            <div className="lg:col-span-3">
               <label htmlFor="new-email" className="stat-label block mb-1.5">
                 Adresse
               </label>
@@ -167,7 +167,7 @@ export default function Team({ onToast }) {
                 className="w-full px-3 py-2 rounded-lg border border-border text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
               />
             </div>
-            <div className="col-span-2">
+            <div className="lg:col-span-2">
               <label htmlFor="new-name" className="stat-label block mb-1.5">
                 Nom complet
               </label>
@@ -179,7 +179,7 @@ export default function Team({ onToast }) {
                 className="w-full px-3 py-2 rounded-lg border border-border text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
               />
             </div>
-            <div className="col-span-3">
+            <div className="lg:col-span-3">
               <label htmlFor="new-password" className="stat-label block mb-1.5">
                 Mot de passe initial (12 caractères min.)
               </label>
@@ -193,7 +193,7 @@ export default function Team({ onToast }) {
                 className="w-full px-3 py-2 rounded-lg border border-border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
               />
             </div>
-            <div className="col-span-3">
+            <div className="lg:col-span-3">
               <label htmlFor="new-role" className="stat-label block mb-1.5">
                 Niveau
               </label>
@@ -210,7 +210,7 @@ export default function Team({ onToast }) {
                 ))}
               </select>
             </div>
-            <div className="col-span-1">
+            <div className="sm:col-span-2 lg:col-span-1">
               <button type="submit" disabled={busy} className="btn btn-primary w-full disabled:opacity-50">
                 Créer
               </button>

@@ -44,7 +44,7 @@ export default function MlInsights() {
   return (
     <AsyncSection loading={loading} error={error} onRetry={reload} isEmpty={!data}>
       <div className="space-y-6">
-        <div className="grid grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
           <StatCard
             label="Modèle chargé"
             value={model.enabled ? model.algorithm : 'Aucun'}
@@ -114,7 +114,7 @@ export default function MlInsights() {
           )}
         </Panel>
 
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <Panel
             title="Origine des détections"
             subtitle="Répartition des alertes réellement enregistrées en base"

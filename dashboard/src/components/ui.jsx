@@ -22,12 +22,16 @@ export function Panel({ title, subtitle, actions, children, className = '' }) {
   return (
     <div className={`panel ${className}`}>
       {(title || actions) && (
-        <div className="flex items-start justify-between mb-5">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
+          <div className="min-w-0">
             {title ? <h2 className="panel-title">{title}</h2> : null}
             {subtitle ? <p className="text-xs text-text-muted mt-1">{subtitle}</p> : null}
           </div>
-          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+          {actions ? (
+            <div className="flex items-center gap-2 flex-wrap sm:justify-end shrink-0">
+              {actions}
+            </div>
+          ) : null}
         </div>
       )}
       {children}

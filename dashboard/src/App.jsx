@@ -82,6 +82,7 @@ function Console() {
       <AlertDetail
         alertId={selectedAlertId}
         onBack={() => navigate('alerts')}
+        onOpenAlert={openAlert}
         onToast={showToast}
       />
     ),

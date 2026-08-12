@@ -20,7 +20,10 @@ export const auth = {
 export const alerts = {
   list: (params, signal) => api.get('/alerts', params, signal),
   get: (id, signal) => api.get(`/alerts/${id}`, undefined, signal),
-  assign: (id, userId) => api.post(`/alerts/${id}/assign`, undefined, userId ? { user_id: userId } : undefined),
+  investigation: (id, signal) => api.get(`/alerts/${id}/investigation`, undefined, signal),
+  assign: (id, userId) =>
+    api.post(`/alerts/${id}/assign`, undefined, userId ? { user_id: userId } : undefined),
+  contain: (id, payload = {}) => api.post(`/alerts/${id}/contain`, payload),
   setStatus: (id, status, resolutionNote) =>
     api.patch(`/alerts/${id}/status`, { status, resolution_note: resolutionNote ?? null }),
 };

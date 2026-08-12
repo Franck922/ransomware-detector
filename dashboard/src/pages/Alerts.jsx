@@ -42,6 +42,8 @@ export default function Alerts({ onOpenAlert }) {
   const [status, setStatus] = useState('');
   const [severity, setSeverity] = useState('');
   const [machineId, setMachineId] = useState('');
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [sort, setSort] = useState('detected_at');
   const [page, setPage] = useState(0);
 
   const { data, loading, error, reload } = useResource(
@@ -51,12 +53,15 @@ export default function Alerts({ onOpenAlert }) {
           status: status || undefined,
           severity: severity || undefined,
           machine_id: machineId || undefined,
+          open_only: unassignedOnly || undefined,
+          unassigned_only: unassignedOnly || undefined,
+          sort,
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         },
         signal,
       ),
-    { channels: ['alerts'], deps: [status, severity, machineId, page] },
+    { channels: ['alerts'], deps: [status, severity, machineId, unassignedOnly, sort, page] },
   );
 
   const items = data?.items || [];
@@ -71,15 +76,42 @@ export default function Alerts({ onOpenAlert }) {
   return (
     <Panel
       title={`${total} alerte(s)`}
-      subtitle="Filtrage et pagination appliqués côté serveur"
+      subtitle={
+        unassignedOnly
+          ? 'File de triage : ouvertes, non assignées'
+          : 'Filtrage et pagination appliqués côté serveur'
+      }
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              setUnassignedOnly((value) => !value);
+              setPage(0);
+              if (!unassignedOnly) {
+                setStatus('');
+                setSort('score');
+              }
+            }}
+            className={`btn ${unassignedOnly ? 'btn-primary' : 'btn-outline'}`}
+          >
+            File de triage
+          </button>
+          <select
+            value={sort}
+            onChange={(event) => resetTo(setSort)(event.target.value)}
+            className="px-2.5 py-1.5 rounded-lg border border-border text-[11px] bg-white focus:outline-none"
+            title="Ordre de tri"
+          >
+            <option value="detected_at">Plus récentes</option>
+            <option value="score">Score décroissant</option>
+          </select>
           <input
             type="text"
             value={machineId}
             onChange={(event) => resetTo(setMachineId)(event.target.value)}
             placeholder="Filtrer par terminal"
-            className="px-2.5 py-1.5 rounded-lg border border-border text-[11px] w-40 focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+            className="px-2.5 py-1.5 rounded-lg border border-border text-[11px] w-full sm:w-40 focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
           />
           <select
             value={severity}
@@ -92,13 +124,14 @@ export default function Alerts({ onOpenAlert }) {
               </option>
             ))}
           </select>
-          <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1 border border-border">
+          <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1 border border-border overflow-x-auto max-w-full">
             {STATUS_FILTERS.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => resetTo(setStatus)(option.value)}
-                className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
+                disabled={unassignedOnly}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all whitespace-nowrap disabled:opacity-40 ${
                   status === option.value
                     ? 'bg-white text-brand-primary shadow-sm'
                     : 'text-text-muted hover:text-text-main'

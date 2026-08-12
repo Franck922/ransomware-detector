@@ -28,6 +28,7 @@ class AuditAction:
     USER_DELETED = "user.deleted"
     ALERT_STATUS_CHANGED = "alert.status_changed"
     ALERT_ASSIGNED = "alert.assigned"
+    ALERT_CONTAINED = "alert.contained"
     RESPONSE_KILL = "response.kill"
     RESPONSE_ISOLATE = "response.isolate"
     RESPONSE_UNISOLATE = "response.unisolate"

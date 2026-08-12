@@ -121,7 +121,7 @@ export default function MachineDetail({ machineId, onBack, onOpenAlert, onToast 
       >
         {info ? (
           <div className="space-y-6">
-            <div className="grid grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
               <StatCard
                 label="Terminal"
                 value={info.machine_id}
@@ -201,7 +201,7 @@ export default function MachineDetail({ machineId, onBack, onOpenAlert, onToast 
               </AsyncSection>
             </Panel>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <Panel title="Alertes du terminal">
                 <AsyncSection
                   loading={machineAlerts.loading}
