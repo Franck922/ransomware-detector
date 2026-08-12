@@ -371,6 +371,23 @@ Divers : `GET /status` (sonde publique, ne divulgue aucune donnée métier), `WE
 - **VM Windows** : Windows 10/11, Sysmon installé, Winlogbeat, PowerShell 5.1+
 - **Réseau** : VMnet1 Host-Only (192.168.10.0/24)
 
+### IP de l'hôte : à lire sur chaque PC (pas une valeur fixe)
+
+Sur VMnet1, l'adresse du **PC qui héberge l'API** n'est **pas la même pour tout le monde**.
+Selon la config VMware, elle vaut souvent `192.168.10.1` ou `192.168.10.2`.
+
+Sur le PC hôte :
+
+```powershell
+ipconfig
+```
+
+Repérer **VMware Network Adapter VMnet1** et noter l'IPv4 — c'est `<IP-HOTE>` dans la suite.
+Sur la VM, Winlogbeat et `agent_ps.ps1` doivent pointer vers **cette** adresse, pas celle
+d'un autre membre de l'équipe.
+
+Exemple : si `ipconfig` affiche `192.168.10.2`, alors `hosts: ["http://192.168.10.2:8000"]`.
+
 ### 1. Cloner et configurer
 
 ```bash
@@ -390,6 +407,22 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 démarrage. Ce mot de passe transitant par un fichier, sa rotation est imposée à la première
 connexion.
 
+### 1 bis. Vous aviez déjà le projet (mise à jour équipe)
+
+Relancer d'anciens conteneurs **ne suffit pas** : la stack a changé (PostgreSQL, auth, nginx).
+
+```bash
+git pull
+cp .env.example .env          # seulement si .env n'existe pas encore
+# Éditer .env : remplacer les CHANGE_ME (chaque poste a ses propres secrets)
+docker compose down
+docker compose up -d --build
+```
+
+Console : **http://localhost:8080**. Pour reprendre une ancienne `alerts.db` :
+`python -m scripts.migrate_sqlite_to_pg`. Puis mettre à jour Winlogbeat sur la VM
+(IP hôte + `password` = `AGENT_TOKEN` du nouveau `.env`).
+
 ### 2. Déploiement conteneurisé (recommandé)
 
 ```bash
@@ -397,10 +430,9 @@ docker compose up -d --build
 ```
 
 Les trois services démarrent : PostgreSQL, l'API (qui applique les migrations Alembic) et nginx.
-La console est accessible sur **http://localhost:8080**, et depuis n'importe quel poste du réseau
-sur `http://<ip-du-serveur>:8080` — aucune URL n'est codée en dur côté client. L'API est aussi
-publiée sur le **port 8000** pour les agents du lab (`winlogbeat` / `agent_ps.ps1` vers
-`http://192.168.10.1:8000`), sans passer par nginx.
+La console est accessible sur **http://localhost:8080**, et depuis le réseau VMnet1 sur
+`http://<IP-HOTE>:8080`. L'API est aussi publiée sur le **port 8000** pour les agents du lab
+(`http://<IP-HOTE>:8000`), sans passer par nginx.
 
 ```bash
 docker compose logs -f api     # suivre le démarrage et les détections
@@ -440,13 +472,19 @@ leur rotation est exigée immédiatement après.
 
 ### 5. Configurer les postes surveillés
 
-Déposer `agent/winlogbeat.yml` dans `C:\Program Files\winlogbeat\`, en y renseignant l'adresse du
-serveur et la valeur d'`AGENT_TOKEN` (champ `password`), puis :
+1. Sur l'hôte, noter `<IP-HOTE>` (`ipconfig` → VMnet1) et la valeur de `AGENT_TOKEN` dans `.env`
+   (ou `docker compose exec -T api printenv AGENT_TOKEN`).
+2. Déposer `agent/winlogbeat.yml` dans `C:\Program Files\winlogbeat\` sur la VM, en adaptant :
+   - `hosts: ["http://<IP-HOTE>:8000"]`
+   - `password: "<AGENT_TOKEN>"` (ce n'est pas une variable nommée AGENT_TOKEN dans le fichier :
+     c'est le champ `password` de la sortie Elasticsearch)
+3. Puis :
 
 ```powershell
 Restart-Service winlogbeat
+Test-NetConnection <IP-HOTE> -Port 8000
 
-$env:EDR_API_URL     = "http://192.168.10.1:8000"
+$env:EDR_API_URL     = "http://<IP-HOTE>:8000"
 $env:EDR_AGENT_TOKEN = "<AGENT_TOKEN>"
 .\agent_ps.ps1                          # agent de réponse (à lancer en administrateur)
 ```
