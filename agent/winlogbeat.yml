@@ -1,16 +1,58 @@
+# ==============================================================================
+# Winlogbeat — collecte Sysmon et envoi direct à l'API EDR
+# ==============================================================================
+# À déposer dans C:\Program Files\winlogbeat\winlogbeat.yml sur chaque poste
+# surveillé, puis : Restart-Service winlogbeat
+#
+# Deux valeurs à adapter avant déploiement :
+#   1. hosts     : adresse du serveur EDR (voir plus bas selon le mode)
+#   2. password  : valeur d'AGENT_TOKEN du fichier .env du serveur
+#
+# L'API refuse désormais toute ingestion non authentifiée : sans ce token,
+# n'importe quelle machine du réseau pourrait injecter de faux événements pour
+# fausser la baseline d'un poste, ou au contraire la saturer pour masquer une
+# attaque réelle.
+# ==============================================================================
+
 winlogbeat.event_logs:
+  # 1  : création de processus
+  # 3  : connexion réseau
+  # 11 : création de fichier
+  # 23 : suppression de fichier
   - name: Microsoft-Windows-Sysmon/Operational
     event_id: 1, 3, 11, 23
 
 output.elasticsearch:
+  # Lab (défaut) : API Docker publiée sur le port 8000 de l'hôte VMnet1.
+  #   hosts: ["http://192.168.10.1:8000"]
+  # Alternative via nginx (origine unique, port 8080) :
+  #   hosts: ["http://192.168.10.1:8080"]
+  #   path: "/api"
+  # Adapter l'IP si l'hôte n'est pas 192.168.10.1 (ipconfig côté serveur).
   hosts: ["http://192.168.10.1:8000"]
+
+  # Winlogbeat n'autorise pas d'en-tête arbitraire sur toutes les versions :
+  # le token voyage donc en authentification Basic. L'utilisateur est ignoré
+  # par l'API, seul le mot de passe est comparé à AGENT_TOKEN du .env serveur.
+  # Sans le bon token, l'ingestion est refusée (401) et le terminal reste hors ligne.
+  username: "agent"
+  password: "REMPLACER_PAR_AGENT_TOKEN"
+
   allow_older_versions: true
   bulk_max_size: 200
   compression_level: 0
 
+# L'API n'est pas un vrai Elasticsearch : on désactive tout ce qui provoquerait
+# des appels de gestion d'index inutiles.
 setup.ilm.enabled: false
 setup.template.enabled: false
 setup.dashboards.enabled: false
+
+# host.name est la clé d'identification du poste côté serveur : c'est ce champ
+# qui alimente l'inventaire des terminaux et garantit qu'une baseline n'est
+# jamais partagée entre deux machines.
+processors:
+  - add_host_metadata: ~
 
 logging.level: info
 logging.to_files: true

@@ -15,11 +15,25 @@ env/
 # Variables d'environnement (clés API, mots de passe)
 .env
 .env.*
+# Le gabarit sans secret doit rester versionné
+!.env.example
 
-# ── Modèles ML entraînés (fichiers lourds) ──────────
-detector/models/*.pkl
-detector/models/*.pt
-detector/models/*.pth
+# ── Node / build frontend ───────────────────────────
+node_modules/
+dashboard/dist/
+.vite/
+
+# ── Modèles ML ──────────────────────────────────────
+# random_forest_model.pkl et scaler.pkl restent versionnés : l'API les charge au
+# démarrage, un clone sans eux tournerait sans détection ML. Ils pèsent 70 Ko.
+# Seuls les artefacts lourds d'expérimentation sont exclus.
+models/*.pt
+models/*.pth
+models/checkpoints/
+
+# ── Artefacts de vérification ───────────────────────
+dashboard/tests/screenshots/
+reports/*.json
 
 # ── Données brutes (trop lourdes pour Git) ──────────
 data/raw/*
@@ -44,5 +58,3 @@ desktop.ini
 
 # ── Jupyter (si utilisé pour expérimentation) ───────
 .ipynb_checkpoints/
-*.ipynbmodels/*.pkl
-models/*.pth
