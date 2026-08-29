@@ -1,0 +1,15 @@
+# Dépendances d'exploration et d'expérimentation, hors serveur.
+#
+# Utilisées pour les notebooks (notebooks/exploration_eda.ipynb) et la comparaison
+# de modèles menée en Phase 4. Le serveur ne les importe pas : les installer dans
+# l'image de l'API ajouterait plus de 2,5 Go pour du code jamais exécuté en
+# production, et allongerait le build de plusieurs dizaines de minutes.
+#
+#   pip install -r requirements.txt -r requirements-research.txt
+
+torch==2.3.1        # piste LSTM (séquentiel) évaluée puis écartée au profit du RF
+xgboost==2.1.0      # comparaison de performance avec le Random Forest retenu
+lxml==5.3.0         # lecture des exports XML bruts de l'Observateur d'événements
+matplotlib==3.9.1   # figures des notebooks
+seaborn==0.13.2     # matrices de corrélation et distributions
+jupyter==1.0.0      # exécution des notebooks

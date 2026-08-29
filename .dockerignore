@@ -1,0 +1,27 @@
+# Sans ce fichier, `COPY . .` embarquait venv/ et dashboard/node_modules/,
+# soit plusieurs gigaoctets transférés au démon Docker à chaque build.
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+dashboard/node_modules/
+dashboard/dist/
+dashboard/tests/screenshots/
+
+.git/
+.gitignore
+.env
+*.log
+alerts.db
+
+data/raw/
+data/external/
+notebooks/
+reports/*.json
+docs/
+*.md

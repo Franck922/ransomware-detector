@@ -1,28 +1,34 @@
+# Dépendances du serveur EDR (API + pipeline de détection).
+# Tout ce qui figure ici est réellement importé par le code exécuté en production.
+# Les paquets d'exploration (notebooks, comparaison de modèles) sont dans
+# requirements-research.txt et volontairement absents de l'image Docker.
+
 # ── API ─────────────────────────────────────────────
 fastapi==0.111.0
-uvicorn==0.30.1
+uvicorn[standard]==0.30.1
+websockets==12.0
 
-# ── Data processing ─────────────────────────────────
-pandas==2.2.3
+# ── Base de données ─────────────────────────────────
+sqlalchemy[asyncio]==2.0.31
+asyncpg==0.29.0                 # driver asynchrone de l'API
+psycopg2-binary==2.9.9          # driver synchrone requis par Alembic
+alembic==1.13.2
+
+# ── Sécurité (hachage des mots de passe, configuration typée) ────
+argon2-cffi==23.1.0
+pydantic==2.7.1
+pydantic-settings==2.3.4
+
+# ── Pipeline de détection ───────────────────────────
 numpy==2.0.0
+pandas==2.2.3
+scikit-learn==1.5.1             # inférence du Random Forest
+joblib==1.4.2                   # chargement de models/*.pkl
 
-# ── Machine Learning classique ───────────────────────
-scikit-learn==1.5.1
-xgboost==2.1.0
-
-# ── Deep Learning ───────────────────────────────────
-torch==2.3.1
-
-# ── Parsing XML (logs Sysmon bruts) ─────────────────
-lxml==5.3.0
-
-# ── Transmission HTTP ────────────────────────────────
-requests==2.32.3
-
-# ── Tests ────────────────────────────────────────────
+# ── Vérification automatisée (scripts/e2e_check.py, ui_check.py) ──
+httpx==0.27.0
 pytest==8.2.2
 pytest-asyncio==0.23.7
 
 # ── Utilitaires ──────────────────────────────────────
 python-dotenv==1.0.1
-pydantic==2.7.1

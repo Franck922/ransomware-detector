@@ -1,142 +1,239 @@
-# Phase 6 : Console Web d'Administration SOC & Base de Données
+# Phase 6 : Console SOC multi-analystes, base partagée et déploiement
 
-Cette phase documente la transition de la console EDR d'un modèle statique et temporaire vers une plateforme de supervision de niveau industriel, intégrant la persistance des données, la sécurité d'accès et la traçabilité complète des interventions.
-
----
-
-## 1. Objectifs de la Phase 6
-1. **Verrouiller l'accès** à la console d'administration SOC par un écran d'authentification.
-2. **Assurer la persistance** de l'historique des alertes au redémarrage de l'API.
-3. **Créer un module d'inscription (Sign-up)** pour enrôler dynamiquement de nouveaux analystes dans la base.
-4. **Développer un journal d'audit dynamique** pour historiser nominativement toutes les interventions de sécurité (Kills, Isolations, Exclusions).
-5. **Gérer de véritables exclusions** de surveillance de fichiers et de dossiers stockées en base de données.
+Cette phase fait passer la console EDR d'une maquette mono-poste à une plateforme de supervision
+utilisable simultanément par plusieurs analystes distants, sur une base de données partagée et
+synchronisée.
 
 ---
 
-## 2. Implémentation du Backend (FastAPI & SQLite)
+## 1. Objectifs de la phase
 
-Nous avons choisi d'intégrer une base de données locale **SQLite** (`alerts.db`) à la racine du backend EDR pour sa légèreté et sa robustesse en mode laboratoire.
+1. **Permettre le travail à plusieurs** : plusieurs analystes connectés à distance depuis leur
+   navigateur, avec des comptes et des habilitations distincts.
+2. **Partager une vision unique du parc** : deux analystes qui regardent le dashboard au même
+   instant doivent voir exactement les mêmes chiffres et le même graphique.
+3. **Synchroniser sans rechargement** : une alerte, une réponse ou une exclusion apparaît chez tous
+   les analystes connectés en moins d'une seconde.
+4. **Rendre les opérations réellement contraintes** : un analyste N1 ne doit pas pouvoir déclencher
+   un arrêt de processus, y compris en appelant l'API directement.
+5. **Rendre la traçabilité opposable** : le journal d'audit ne doit pas pouvoir être falsifié par
+   celui qui y est inscrit.
+6. **Déployer en une commande**, sans prérequis Python ni Node.js sur le serveur.
 
-### 2.1 Schéma des Tables SQLite
-Lors de l'initialisation de l'API (`api/main.py`), quatre tables sont créées automatiquement si elles n'existent pas :
-```sql
-CREATE TABLE IF NOT EXISTS alerts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT,
-    pid INTEGER,
-    process TEXT,
-    score REAL,
-    confidence REAL,
-    status TEXT,
-    kill_payload TEXT
-);
+---
 
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password_hash TEXT,
-    role TEXT,
-    permissions TEXT
-);
+## 2. Ce que la première itération ne permettait pas
 
-CREATE TABLE IF NOT EXISTS exclusions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT,
-    path TEXT,
-    comment TEXT
-);
+La version précédente fonctionnait en démonstration sur un seul poste. La confronter à l'exigence
+« plusieurs analystes voient les mêmes données » a révélé des limites structurelles, et non de
+simples ajustements :
 
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT,
-    username TEXT,
-    action TEXT,
-    details TEXT,
-    ip_source TEXT
-);
+| Constat | Conséquence |
+|---------|-------------|
+| **SQLite verrouille la base entière** à chaque écriture | Impossible d'ingérer les événements des agents pendant que des analystes consultent la console. Le fournisseur SQLite le documente lui-même : un seul écrivain à la fois. |
+| **État de détection en mémoire du processus** (fenêtres, baseline, alertes) | Tout redémarrage effaçait la baseline, et un second processus API aurait vu un état totalement différent. |
+| **Authentification décidée par le navigateur** | Le rôle était conservé côté client : il suffisait de le modifier dans le navigateur, ou d'appeler l'API sans passer par l'interface, pour obtenir les droits d'un SOC Manager. |
+| **Journal d'audit alimenté par le client** | L'auteur et l'adresse IP d'une action étaient fournis par l'appelant. N'importe qui pouvait donc écrire une entrée au nom d'un autre analyste, ce qui ôtait toute valeur probante au registre. |
+| **Compte administrateur en dur** (`Franck` / `admin123`, haché en SHA-256) | Identifiants publiés dans le dépôt et hachage sans sel, inadapté à des mots de passe. |
+| **File de commandes en liste Python, sans destinataire** | `pending_commands.pop(0)` : la première machine à interroger l'API récupérait l'ordre d'arrêt destiné à une autre, sans trace ni accusé de réception. |
+| **Rafraîchissement par sondage toutes les 2 s** | Latence visible, charge inutile, et surtout aucune garantie que deux consoles soient au même point. |
+| **Score de gravité non borné** | Un score de 146 sur une échelle présentée comme /100 : la gravité était en réalité le compteur d'activité du processus, donc un serveur de fichiers actif devenait « critique » par simple volume. |
+| **Pas de cloisonnement par machine** | Les événements de tous les postes alimentaient les mêmes fenêtres et la même baseline : l'activité d'un poste pouvait masquer une attaque sur un autre. |
+
+---
+
+## 3. Base de données PostgreSQL
+
+**Neuf tables** décrivent désormais l'ensemble du domaine, versionnées par Alembic
+(`migrations/versions/`) :
+
+| Table | Rôle |
+|-------|------|
+| `users` | Comptes analystes : hachage argon2id, rôle, verrouillage, rotation exigée |
+| `sessions` | Sessions serveur, révocables, associées à une empreinte de cookie |
+| `machines` | Inventaire des postes : dernier contact, état d'isolation, phase d'apprentissage |
+| `alerts` | Alertes avec fiche forensics complète, affectation et statut de traitement |
+| `metrics` | Agrégats horodatés par intervalle, qui alimentent le graphique partagé |
+| `commands` | File d'ordres adressés à une machine précise, avec statut et accusé de réception |
+| `exclusions` | Règles de confiance appliquées par le moteur de détection |
+| `audit_logs` | Journal nominatif, écrit exclusivement par le serveur |
+| `app_settings` | Configuration modifiable depuis la console (seuils, rétention) |
+
+PostgreSQL a été retenu pour trois raisons précises :
+
+- **écritures concurrentes** : l'ingestion continue des agents et la consultation par les analystes
+  ne se bloquent plus mutuellement ;
+- **agrégation côté serveur** : `date_bin` permet de découper le temps sur une origine fixe, donc de
+  garantir que deux analystes obtiennent des barres identiques, et non deux découpages calculés
+  chacun à partir de son « maintenant » ;
+- **contraintes réelles** : unicité, clés étrangères et transactions empêchent les incohérences que
+  du code applicatif devait sinon prévenir à la main.
+
+Un script de reprise (`scripts/migrate_sqlite_to_pg.py`) importe l'ancienne base : comptes,
+exclusions, journal d'audit et alertes sont conservés. Les mots de passe SHA-256 importés sont
+marqués comme héritage, réhachés en argon2id à la première connexion réussie, puis leur rotation est
+immédiatement exigée.
+
+---
+
+## 4. Comptes, sessions et habilitations
+
+- **Hachage argon2id** (`argon2-cffi`), conçu pour les mots de passe : coût mémoire et temporel
+  paramétrable, contrairement à SHA-256 qui est volontairement rapide donc facile à attaquer par
+  force brute.
+- **Session serveur** matérialisée par un cookie `HttpOnly` + `SameSite`. Le JavaScript de la page
+  ne peut pas le lire : un XSS ne permet pas de voler une session. Aucun jeton n'est déposé dans
+  `localStorage`, et la réponse de connexion ne contient rien d'exploitable.
+- **Révocation effective** : la déconnexion supprime la session en base. Rejouer le cookie ensuite
+  renvoie 401, ce qui est vérifié automatiquement.
+- **Verrouillage** après 5 échecs consécutifs, avec un message d'erreur identique pour un compte
+  inexistant et un mot de passe erroné : la page de connexion ne révèle pas quels comptes existent.
+- **Rotation imposée** : un mot de passe défini par un administrateur ne donne accès à rien d'autre
+  qu'à son propre changement, ce que le serveur signale par un en-tête dédié.
+- **Trois niveaux d'habilitation** appliqués par des dépendances FastAPI sur chaque route :
+
+| Niveau | Peut |
+|--------|------|
+| **N1 — Analyste** | consulter, prendre en charge et qualifier les alertes |
+| **N2 — Analyste confirmé** | en plus : arrêter un processus, isoler et désisoler un poste |
+| **N3 — SOC Manager** | en plus : gérer les comptes, les exclusions et la configuration |
+
+L'interface masque les actions inaccessibles, mais ce n'est qu'un confort d'affichage : la
+protection réelle est le refus du serveur. Un appel direct à `POST /response/kill` avec un compte N1
+reçoit un 403, et la tentative est journalisée.
+
+---
+
+## 5. Synchronisation temps réel
+
+Un hub WebSocket (`api/realtime.py`) diffuse des **avis d'invalidation par canal** : `alerts`,
+`metrics`, `machines`, `commands`, `audit`, `exclusions`.
+
+```json
+{ "type": "invalidate", "channel": "alerts", "at": "2026-08-11T14:23:52.187Z" }
 ```
 
-### 2.2 Utilisateur Administrateur par Défaut
-Afin de permettre une connexion immédiate après l'initialisation de la base de données, un profil d'administrateur par défaut est créé et inséré :
-* **Username :** `Franck`
-* **Password :** `admin123` (Stocké sous forme de hash SHA-256 : `240753773b586c21e51b2a95c95a0680...`)
-* **Rôle :** `SOC Manager (N3)` (Permissions : "Contrôle total, Isolation, Exclusions")
+Le message ne transporte volontairement **aucune donnée métier**. Chaque console relit ensuite
+l'API sur le canal concerné. Ce choix a trois effets :
+
+1. un message perdu ou réordonné ne peut pas laisser une console avec un état divergent, puisque la
+   vérité est toujours relue en base ;
+2. les habilitations sont réévaluées à chaque lecture, alors qu'une diffusion de données obligerait
+   à filtrer le contenu par destinataire ;
+3. le canal reste léger, même pendant une rafale d'ingestion.
+
+La connexion est authentifiée par le cookie de session : un WebSocket anonyme est refusé. En cas de
+coupure, l'interface l'affiche explicitement et bascule sur un rafraîchissement périodique, plutôt
+que de laisser croire à des données à jour.
 
 ---
 
-## 3. Implémentation du Frontend (React & Tailwind CSS)
+## 6. Console SOC (React)
 
-L'application web React a été enrichie de plusieurs modules clés :
+L'application monolithique a été découpée en contextes (session, temps réel), en un client d'API
+unique, un hook de lecture réutilisable, et **onze onglets** : vue d'ensemble, terminaux, alertes,
+journal des réponses, statistiques ML, moteur heuristique, exclusions, journal d'audit, équipe SOC,
+configuration et documentation. Deux vues de détail complètent l'ensemble, atteintes en cliquant sur
+une ligne : la fiche forensics d'une alerte et la fiche d'un terminal.
 
-### 3.1 Écran d'Authentification & d'Inscription (Login / Sign-up)
-* L'écran de connexion par défaut masque le reste du Dashboard tant que l'analyste n'a pas validé son jeton de session.
-* Un lien permet de basculer vers un écran d'inscription pour créer de nouveaux profils avec choix du rôle EDR (N1, N2 ou N3).
+Aucune donnée n'est simulée : chaque écran lit l'API. Les points suivants ont été traités
+spécifiquement :
 
-### 3.2 Profil Analyste Interactif (Header)
-L'avatar utilisateur est cliquable et affiche une bulle de profil déroulante :
-* Justifie le nom de l'analyste connecté et son niveau de rôle.
-* Affiche ses permissions effectives sous forme de badges.
-* Propose un bouton de déconnexion immédiat.
-
-### 3.3 Éditeur d'Exclusions Actives
-Connecté directement aux routes `/exclusions` de l'API :
-* Permet d'insérer dynamiquement des dossiers (ex: `C:\Program Files\Git\`) ou des exécutables de confiance.
-* Offre la possibilité de retirer une exclusion active de la base.
-
-### 3.4 Journal d'Audit SOC
-* Historise nominativement toutes les opérations critiques avec heure exacte, action, détail et adresse IP source de la console d'administration.
+- **le score de risque et les compteurs sont calculés par le serveur**, pas dans le navigateur ;
+- **l'onglet Moteur heuristique lit les seuils réellement en vigueur** depuis la configuration, au
+  lieu de recopier des valeurs dans le code de la page, où elles auraient dérivé silencieusement ;
+- **aucune inscription libre** n'est proposée : la création de compte relève du SOC Manager ;
+- **la documentation est embarquée** dans la console, pour que l'analyste de garde n'ait pas à
+  chercher un fichier ailleurs.
 
 ---
 
-## 4. Déploiement Conteneurisé (Docker & Docker Compose)
+## 7. Corrections du moteur de détection
 
-Afin d'industrialiser le déploiement et de rendre l'application portable sur n'importe quelle machine (sans nécessiter l'installation de Python, Node.js ou npm localement), nous avons mis en place une conteneurisation complète.
+Trois défauts ont été corrigés en plus de la refonte d'architecture :
 
-### 4.1 Conteneurisation de l'API (Backend)
-Le `Dockerfile` à la racine s'appuie sur une image ultra-légère `python:3.11-slim` :
-* Il copie les dépendances (`requirements.txt`).
-* Installe les bibliothèques requises (`fastapi`, `uvicorn`, `sqlite3`, etc.).
-* Expose le port **`8000`** et démarre le serveur de manière asynchrone avec Uvicorn.
+- **Score borné et explicable.** La gravité est désormais le maximum entre le score heuristique
+  normalisé et la probabilité du modèle, sur 0–100. Le compteur d'activité brut du processus reste
+  dans la fiche d'alerte comme élément de preuve, mais ne fait plus office de gravité.
+- **Cloisonnement par machine.** Chaque poste dispose de son propre extracteur de features et de sa
+  propre baseline. Sans cela, le comportement normal d'un poste bureautique et celui d'un serveur de
+  fichiers étaient moyennés dans la même référence.
+- **Dernière fenêtre garantie.** Une fenêtre d'analyse ne se fermait qu'à l'arrivée d'un événement
+  postérieur. Si un rançongiciel neutralise l'agent ou éteint le poste juste après son passage,
+  aucun événement n'arrive plus — et c'est précisément cette fenêtre qui contient la preuve. Une
+  tâche de fond évalue donc les fenêtres restées inactives, sans pour autant faire passer le poste
+  silencieux pour actif.
 
-### 4.2 Conteneurisation du Dashboard (Frontend)
-Le Dashboard React est déployé dans un serveur web **Nginx** (via l'image officielle `nginx:alpine`) :
-* Il sert statiquement le dossier de build de production `./dashboard/dist` sur le port **`8080`** de la machine hôte.
-
-### 4.3 Orchestration avec Docker Compose
-Le fichier `docker-compose.yml` orchestre et configure ces deux conteneurs :
-```yaml
-services:
-  api:
-    build: .
-    container_name: edr-api
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./models:/app/models
-      - ./reports:/app/reports
-      - ./alerts.db:/app/alerts.db
-    restart: unless-stopped
-
-  dashboard:
-    image: nginx:alpine
-    container_name: edr-dashboard
-    ports:
-      - "8080:80"
-    volumes:
-      - ./dashboard/dist:/usr/share/nginx/html
-    restart: unless-stopped
-    depends_on:
-      - api
-```
-
-#### Points Clés de Sécurité & Fiabilité dans le Compose :
-* **Persistance SQLite** : Montage de volume `- ./alerts.db:/app/alerts.db`. Cela garantit que la base de données SQLite physique reste stockée sur la machine hôte. Si les conteneurs sont mis à jour, arrêtés ou recréés, les comptes utilisateurs, les exclusions et les logs d'audit ne sont jamais perdus.
-* **Synchronisation** : L'option `depends_on` force le conteneur API à démarrer avant le Dashboard.
+Les exclusions sont par ailleurs réellement appliquées par le moteur, et non simplement stockées :
+un événement portant sur un chemin exclu ne produit plus d'alerte, ce qui est vérifié
+automatiquement.
 
 ---
 
-## 5. Tests et Validation
-* **Création de Compte :** Inscription réussie de profils alternatifs et reconnexion avec les droits correspondants.
-* **Persistance après Reboot :** Après arrêt et redémarrage du backend FastAPI (ou des conteneurs Docker), l'historique complet des alertes et les exclusions définies sont parfaitement préservés.
-* **Journalisation :** Chaque action de blocage manuel (Kill) ou d'isolation réseau initiée depuis le Dashboard écrit instantanément une trace d'audit nominative en base SQLite.
-* **Déploiement Docker :** Tout le serveur EDR démarre en une seule ligne de commande (`docker-compose up -d --build`) et est directement accessible sur l'hôte.
+## 8. Agents authentifiés
+
+Les routes d'ingestion et la file de commandes exigent un token d'agent. Sans lui, n'importe quelle
+machine du réseau pourrait injecter de faux événements pour fausser une baseline, ou dépiler l'ordre
+d'arrêt qui la visait.
+
+- `winlogbeat.yml` transmet le token et une identification stable de la machine.
+- `agent_ps.ps1` récupère uniquement les commandes destinées à **sa** machine, exécute l'arrêt de
+  processus, l'isolation ou la levée d'isolation, puis **acquitte** l'exécution.
+- Une commande non acquittée au bout de 15 minutes expire, ce qui évite qu'un poste éteint au mauvais
+  moment laisse un ordre en attente indéfiniment.
+
+---
+
+## 9. Déploiement conteneurisé
+
+`docker compose up -d --build` démarre trois services :
+
+| Service | Rôle |
+|---------|------|
+| `db` | PostgreSQL 16, données dans un volume nommé, sonde de disponibilité |
+| `api` | FastAPI ; applique les migrations Alembic puis démarre, en utilisateur non privilégié |
+| `web` | Compile la console React puis la sert avec nginx, origine unique pour `/`, `/api` et `/ws` |
+
+Deux points ont un effet direct sur le fonctionnement :
+
+- **Origine unique.** Le navigateur ne voit qu'un seul hôte, donc plus de CORS à ouvrir et le cookie
+  de session fonctionne nativement, y compris pour les analystes distants. Le mode développement
+  reproduit ce montage via le proxy de Vite, afin que le comportement soit identique.
+- **Un seul worker pour l'API, volontairement.** Les extracteurs de features et les baselines sont
+  des automates à état en mémoire de processus : répartir les événements d'une même machine sur
+  plusieurs workers fausserait fenêtres et baselines. La consultation, elle, passe entièrement par
+  PostgreSQL, donc le nombre de consoles connectées n'a aucune incidence sur la cohérence.
+
+Le build de l'image de l'API a par ailleurs été ramené de **plus de quinze minutes à une minute** :
+`requirements.txt` déclarait PyTorch, XGBoost et lxml — plus de 2,5 Go — alors qu'aucun fichier du
+serveur ne les importe. Ces dépendances d'expérimentation sont désormais isolées dans
+`requirements-research.txt`. Un `.dockerignore` empêche en outre `venv/` et `node_modules/` de
+partir dans le contexte de build.
+
+---
+
+## 10. Vérification
+
+Trois suites automatisées, exécutées **contre le déploiement conteneurisé complet** (donc à travers
+nginx, avec l'API dans son conteneur) et non seulement en développement :
+
+| Suite | Portée | Résultat |
+|-------|--------|----------|
+| `scripts/e2e_check.py` | 86 contrôles : authentification, habilitations, CRUD, ingestion, détection, réponse active, temps réel, audit, configuration | 86/86 |
+| `scripts/ui_check.py` | 37 contrôles : parcours d'un navigateur à travers le proxy, cookie de session compris | 37/37 |
+| `dashboard/tests/smoke.mjs` | Rendu des 11 onglets dans Chromium, échec sur la moindre erreur JavaScript | 11/11, console propre |
+
+Contrôles les plus significatifs au regard des objectifs de la phase :
+
+- deux analystes obtiennent des compteurs et des séries temporelles **identiques**, avec les mêmes
+  bornes de graphique ;
+- un compte N1 se voit refuser l'arrêt de processus, l'isolation, la liste des comptes et la
+  création d'exclusion — et le refus est bien lié au rôle, non à un mot de passe en attente ;
+- le cookie de session est **invisible de `document.cookie`** dans un vrai navigateur ;
+- une écriture depuis l'interface **notifie immédiatement** les autres analystes ;
+- l'adresse IP inscrite au journal d'audit est **déterminée par le serveur** ;
+- l'historique importé de l'ancienne base SQLite est **retrouvé après migration** ;
+- la dernière fenêtre d'une attaque est analysée **même quand l'agent cesse d'émettre**.
+
+Ces suites sont rejouables à volonté, ce qui permet de les exécuter pendant la soutenance plutôt que
+de reposer sur des captures d'écran.

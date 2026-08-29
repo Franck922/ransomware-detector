@@ -1,0 +1,64 @@
+# ==============================================================================
+# Winlogbeat — collecte Sysmon et envoi direct à l'API EDR
+# ==============================================================================
+# À déposer dans C:\Program Files\winlogbeat\winlogbeat.yml sur chaque poste
+# surveillé, puis : Restart-Service winlogbeat
+#
+# Deux valeurs à adapter avant déploiement (sur CHAQUE poste / chaque lab) :
+#   1. hosts     : IP VMnet1 du PC qui héberge l'API — lire avec ipconfig sur l'hôte
+#                  (souvent 192.168.10.1 OU 192.168.10.2 selon la machine)
+#   2. password  : valeur d'AGENT_TOKEN du fichier .env du serveur (pas un fichier sur la VM)
+#
+# L'API refuse désormais toute ingestion non authentifiée : sans ce token,
+# n'importe quelle machine du réseau pourrait injecter de faux événements pour
+# fausser la baseline d'un poste, ou au contraire la saturer pour masquer une
+# attaque réelle.
+# ==============================================================================
+
+winlogbeat.event_logs:
+  # 1  : création de processus
+  # 3  : connexion réseau
+  # 11 : création de fichier
+  # 23 : suppression de fichier
+  - name: Microsoft-Windows-Sysmon/Operational
+    event_id: 1, 3, 11, 23
+
+output.elasticsearch:
+  # Remplacer <IP-HOTE> par l'IPv4 VMnet1 du PC serveur (ipconfig sur l'hôte).
+  # Lab : API Docker sur le port 8000.
+  #   hosts: ["http://192.168.10.1:8000"]   # exemple si l'hôte est en .1
+  #   hosts: ["http://192.168.10.2:8000"]   # exemple si l'hôte est en .2
+  # Alternative via nginx :
+  #   hosts: ["http://<IP-HOTE>:8080"]
+  #   path: "/api"
+  hosts: ["http://<IP-HOTE>:8000"]
+
+  # Winlogbeat n'autorise pas d'en-tête arbitraire sur toutes les versions :
+  # le token voyage donc en authentification Basic. L'utilisateur est ignoré
+  # par l'API, seul le mot de passe est comparé à AGENT_TOKEN du .env serveur.
+  # Sans le bon token, l'ingestion est refusée (401) et le terminal reste hors ligne.
+  username: "agent"
+  password: "REMPLACER_PAR_AGENT_TOKEN"
+
+  allow_older_versions: true
+  bulk_max_size: 200
+  compression_level: 0
+
+# L'API n'est pas un vrai Elasticsearch : on désactive tout ce qui provoquerait
+# des appels de gestion d'index inutiles.
+setup.ilm.enabled: false
+setup.template.enabled: false
+setup.dashboards.enabled: false
+
+# host.name est la clé d'identification du poste côté serveur : c'est ce champ
+# qui alimente l'inventaire des terminaux et garantit qu'une baseline n'est
+# jamais partagée entre deux machines.
+processors:
+  - add_host_metadata: ~
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: C:/ProgramData/winlogbeat/Logs
+  name: winlogbeat
+  keepfiles: 7

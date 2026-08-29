@@ -26,9 +26,20 @@ body {
   @apply bg-bg-main text-text-main font-sans antialiased;
 }
 
+@keyframes slideIn {
+  from {
+    transform: translateX(-12px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 /* Styles des cartes statistiques */
 .card-stat {
-  @apply bg-bg-card border border-border rounded-xl p-5 flex flex-col gap-2 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5;
+  @apply bg-bg-card border border-border rounded-xl p-4 sm:p-5 flex flex-col gap-2 shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5;
 }
 
 .stat-label {
@@ -36,7 +47,7 @@ body {
 }
 
 .stat-value {
-  @apply text-2xl font-bold tracking-tight text-text-main;
+  @apply text-xl sm:text-2xl font-bold tracking-tight text-text-main;
 }
 
 .stat-desc {
@@ -45,7 +56,7 @@ body {
 
 /* Panneaux */
 .panel {
-  @apply bg-bg-card border border-border rounded-xl p-6 shadow-sm;
+  @apply bg-bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm;
 }
 
 .panel-title {
@@ -54,7 +65,7 @@ body {
 
 /* Boutons */
 .btn {
-  @apply px-4 py-2 rounded-lg font-medium text-xs transition-all duration-150 cursor-pointer inline-flex items-center justify-center gap-2;
+  @apply px-3 sm:px-4 py-2 rounded-lg font-medium text-xs transition-all duration-150 cursor-pointer inline-flex items-center justify-center gap-2;
 }
 
 .btn-primary {
@@ -88,24 +99,24 @@ body {
 
 /* Code */
 .code-text {
-  @apply font-mono text-xs bg-gray-50 border border-border px-1.5 py-0.5 rounded text-slate-800;
+  @apply font-mono text-xs bg-gray-50 border border-border px-1.5 py-0.5 rounded text-slate-800 break-all;
 }
 
 /* Tables */
 .table-container {
-  @apply overflow-x-auto;
+  @apply overflow-x-auto -mx-1 px-1;
 }
 
 .custom-table {
-  @apply w-full border-collapse text-left;
+  @apply w-full border-collapse text-left min-w-[36rem];
 }
 
 .custom-table th {
-  @apply py-3 px-4 text-[10px] uppercase font-bold tracking-wider text-text-muted border-b border-border;
+  @apply py-3 px-3 sm:px-4 text-[10px] uppercase font-bold tracking-wider text-text-muted border-b border-border whitespace-nowrap;
 }
 
 .custom-table td {
-  @apply py-3.5 px-4 text-xs border-b border-border text-slate-700;
+  @apply py-3 sm:py-3.5 px-3 sm:px-4 text-xs border-b border-border text-slate-700;
 }
 
 .custom-table tr:last-child td {

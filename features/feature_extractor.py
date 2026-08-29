@@ -34,8 +34,19 @@ class FeatureExtractor:
         if delta >= self.window_seconds:
             return True
 
+        # Événement antérieur au début de fenêtre : cela arrive quand un agent
+        # rejoue un journal après redémarrage, ou quand son horloge recule.
+        # Sans ce garde-fou, window_start restait bloqué dans le futur et plus
+        # aucune fenêtre ne se fermait : la détection s'arrêtait silencieusement
+        # sur la machine concernée.
+        if delta <= -self.window_seconds:
+            return True
+
         self.events_buffer.append(event)
         return False
+
+    def has_pending_events(self) -> bool:
+        return bool(self.events_buffer)
 
     def extract_features(self) -> Dict[str, Any]:
         features = {

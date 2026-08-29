@@ -1,7 +1,7 @@
 # Guide de Configuration du Laboratoire (Lab Setup)
 
 **Date de rédaction** : Juillet 2026  
-**Dernière mise à jour** : 22 juillet 2026  
+**Dernière mise à jour** : 12 août 2026  
 **Public cible** : Tout membre de l'équipe souhaitant reproduire l'environnement de test
 
 ---
@@ -10,10 +10,15 @@
 
 Le laboratoire est composé de deux machines connectées par un réseau virtuel isolé :
 
-| Machine | Rôle | OS | IP |
-|---------|------|----|----|
-| **PC Hôte** | Serveur d'analyse (Backend API + ML) | Windows 10/11 | 192.168.10.2 |
-| **VM Windows** | Poste victime (Endpoint protégé) | Windows 10 Pro | 192.168.10.10 |
+| Machine | Rôle | OS | IP (exemple) |
+|---------|------|----|--------------|
+| **PC Hôte** | Serveur EDR (API + PostgreSQL + console) | Windows 10/11 | **À lire avec `ipconfig`** — souvent `192.168.10.1` **ou** `192.168.10.2` |
+| **VM Windows** | Poste victime (Endpoint protégé) | Windows 10 Pro | souvent `192.168.10.10` |
+
+> **Important pour l'équipe :** l'IP VMnet1 de l'hôte n'est **pas unique pour tout le monde**.
+> Chez un membre elle peut être `.1`, chez un autre `.2`. Chaque lab doit utiliser
+> **l'IP réelle de son propre PC hôte**, lue avec `ipconfig` (adaptateur VMnet1).
+> Dans ce guide, on note cette adresse `<IP-HOTE>`.
 
 Le réseau est un **VMnet1 Host-Only** (192.168.10.0/24) créé par VMware Workstation Pro, ce qui signifie qu'aucune machine n'a accès à Internet (sauf si on ajoute un NAT explicite). Cet isolement garantit que les simulations de ransomware ne peuvent pas se propager vers le réseau réel.
 
@@ -22,36 +27,55 @@ Le réseau est un **VMnet1 Host-Only** (192.168.10.0/24) créé par VMware Works
 ## 2. Configuration du PC Hôte (Serveur Backend)
 
 ### 2.1. Prérequis logiciels
-- **Python 3.11+** : Télécharger depuis [python.org](https://python.org). Cocher "Add Python to PATH" lors de l'installation.
-- **Git** : Télécharger depuis [git-scm.com](https://git-scm.com).
+- **Docker Desktop** : recommandé pour démarrer toute la stack (`db` + `api` + `web`) en une commande.
+- **Python 3.11+** et **Git** : utiles en mode développement hors Docker.
 - **VMware Workstation Pro** : Version 17+ recommandée.
-- **Docker Desktop** (optionnel, pour le déploiement conteneurisé en Phase 6).
 
-### 2.2. Cloner le projet et installer les dépendances
+### 2.2. Cloner (ou mettre à jour) le projet
+
+**Premier clone :**
 ```bash
 git clone https://github.com/Franck922/ransomware-detector.git
 cd ransomware-detector
-
-# Création de l'environnement virtuel Python
-python -m venv venv
-.\venv\Scripts\activate
-
-# Installation des dépendances
-pip install -r requirements.txt --prefer-binary
+cp .env.example .env
 ```
 
+**Déjà installé (équipe) :** ne pas se contenter de rouvrir d'anciens conteneurs.
+```bash
+git pull
+cp .env.example .env   # seulement si .env n'existe pas encore
+# Éditer .env : POSTGRES_PASSWORD, SESSION_SECRET, AGENT_TOKEN, BOOTSTRAP_ADMIN_PASSWORD
+docker compose down
+docker compose up -d --build
+```
+
+Éditer `.env` et remplacer toutes les valeurs `CHANGE_ME`. Chaque poste génère ses propres secrets
+(`python -c "import secrets; print(secrets.token_urlsafe(48))"`).
+
 ### 2.3. Vérifier l'adresse IP du réseau VMnet1
-Ouvrir un terminal PowerShell et taper :
+Ouvrir un terminal PowerShell **sur le PC hôte** et taper :
 ```powershell
 ipconfig
 ```
-Rechercher l'adaptateur **VMware Network Adapter VMnet1**. L'adresse IP doit être `192.168.10.2` (ou similaire). Si elle est différente, il faudra adapter la configuration de Winlogbeat sur la VM en conséquence.
+Repérer l'adaptateur **VMware Network Adapter VMnet1** et noter l'IPv4 : c'est `<IP-HOTE>`.
+C'est cette valeur (et non celle d'un autre membre) qui doit figurer dans Winlogbeat et
+`agent_ps.ps1` sur la VM.
 
-### 2.4. Lancer le serveur API
+### 2.4. Lancer le serveur
+**Recommandé (Docker) :**
 ```bash
+docker compose up -d --build
+```
+- Console SOC : http://localhost:8080  
+- API agents : http://\<IP-HOTE\>:8000  
+
+**Mode développement (API seule) :**
+```bash
+docker compose up -d db
+alembic upgrade head
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
-Le serveur écoute sur toutes les interfaces réseau (`0.0.0.0`), ce qui permet à la VM de le joindre via l'IP du VMnet1. Le port `8000` est celui configuré dans Winlogbeat et dans l'Agent PowerShell.
+Le serveur écoute sur toutes les interfaces (`0.0.0.0`), ce qui permet à la VM de le joindre via `<IP-HOTE>`.
 
 ---
 
@@ -66,8 +90,8 @@ Le serveur écoute sur toutes les interfaces réseau (`0.0.0.0`), ce qui permet 
 2. Installer Windows 10 normalement.
 3. Vérifier la connectivité réseau :
    ```powershell
-   # Sur la VM
-   ping 192.168.10.2
+   # Sur la VM — remplacer par l'IP VMnet1 réelle de VOTRE hôte
+   ping <IP-HOTE>
    ```
    Si le ping réussit, la communication avec le PC hôte est établie.
 
@@ -123,7 +147,11 @@ Winlogbeat est un agent léger développé par Elastic qui lit les journaux d'é
 - Extraire dans `C:\Program Files\Winlogbeat\`
 
 #### Étape 2 : Configurer Winlogbeat
-Remplacer le contenu du fichier `winlogbeat.yml` par notre configuration personnalisée (disponible dans `agent/winlogbeat.yml` du dépôt). Les points clés de la configuration :
+Partir du modèle `agent/winlogbeat.yml` du dépôt. **Deux valeurs à adapter sur chaque lab :**
+
+1. `hosts` → `http://<IP-HOTE>:8000` (IP VMnet1 de **votre** PC hôte, lue avec `ipconfig`)
+2. `password` → la valeur de `AGENT_TOKEN` du `.env` **du serveur** (à coller dans le champ
+   `password` ; ce n'est pas un fichier présent sur la VM)
 
 ```yaml
 winlogbeat.event_logs:
@@ -131,15 +159,20 @@ winlogbeat.event_logs:
     event_id: 1, 3, 11, 23
 
 output.elasticsearch:
-  hosts: ["http://192.168.10.2:8000"]
-  # Notre API FastAPI simule un serveur Elasticsearch
-  # Winlogbeat pense parler à Elasticsearch, mais c'est notre API
+  # Exemples : http://192.168.10.1:8000  OU  http://192.168.10.2:8000
+  hosts: ["http://<IP-HOTE>:8000"]
+  username: "agent"
+  password: "REMPLACER_PAR_AGENT_TOKEN"
 
 setup.ilm.enabled: false
 setup.template.enabled: false
 ```
 
-> **Point technique important** : Notre API FastAPI implémente les endpoints Elasticsearch nécessaires (`/`, `/_bulk`, `/_license`, `/_xpack`, `/_ilm/policy/*`, `/_index_template/*`, `/_ingest/pipeline/*`) pour que Winlogbeat fonctionne nativement sans aucun script intermédiaire. C'est une innovation technique significative du projet.
+Sans le bon token, l'API répond **401** et le terminal reste hors ligne dans la console.
+
+> **Point technique :** l'API FastAPI implémente les endpoints Elasticsearch nécessaires
+> (`/`, `/_bulk`, `/_license`, `/_xpack`, …) pour que Winlogbeat fonctionne nativement,
+> sans script intermédiaire. L'ingestion `/_bulk` exige désormais le token d'agent.
 
 #### Étape 3 : Installer et démarrer Winlogbeat comme service
 ```powershell
@@ -154,14 +187,16 @@ Start-Service winlogbeat
 
 # Vérification
 Get-Service winlogbeat
+Test-NetConnection <IP-HOTE> -Port 8000
 ```
 
 #### Étape 4 : Vérifier la réception des logs
-Sur le PC hôte, l'API Uvicorn devrait afficher dans les logs :
+Sur le PC hôte (`docker compose logs -f api` ou la console Uvicorn) :
 ```
 INFO: 192.168.10.10:XXXXX - "POST /_bulk?filter_path=..." 200 OK
 ```
-Cela confirme que Winlogbeat envoie bien ses logs à notre API.
+Cela confirme que Winlogbeat envoie bien ses logs à l'API. Un **401** indique un
+`password` / `AGENT_TOKEN` incorrect.
 
 ---
 
@@ -179,15 +214,18 @@ Set-ExecutionPolicy Unrestricted -Force
 
 #### Étape 3 : Lancer l'Agent
 ```powershell
+# Remplacer <IP-HOTE> et coller le même AGENT_TOKEN que dans le .env du serveur
+$env:EDR_API_URL     = "http://<IP-HOTE>:8000"
+$env:EDR_AGENT_TOKEN = "<AGENT_TOKEN>"
 .\agent_ps.ps1
 ```
-L'Agent affichera :
+L'Agent affichera (exemple) :
 ```
 ==============================================
   AGENT EDR - DETECTION & REPONSE ACTIVE
 ==============================================
 [*] Demarrage du daemon en arriere-plan...
-[*] Connexion a l'API centrale : http://192.168.10.2:8000
+[*] Connexion a l'API centrale : http://<IP-HOTE>:8000
 [+] Pret et en attente d'ordres.
 ```
 
@@ -207,14 +245,15 @@ L'Agent affichera :
 
 Avant de lancer un test, vérifier que :
 
-- [ ] Le PC hôte a Python 3.11+ et le venv activé
-- [ ] L'API Uvicorn tourne sur le PC hôte (`uvicorn api.main:app --host 0.0.0.0 --port 8000`)
-- [ ] La VM peut pinger le PC hôte (`ping 192.168.10.2`)
+- [ ] Sur l'hôte, `<IP-HOTE>` est connue (`ipconfig` → VMnet1)
+- [ ] `.env` est renseigné (plus de `CHANGE_ME`) et la stack tourne (`docker compose up -d` ou Uvicorn)
+- [ ] Console accessible sur http://localhost:8080
+- [ ] La VM peut pinger l'hôte (`ping <IP-HOTE>`) et joindre le port 8000 (`Test-NetConnection <IP-HOTE> -Port 8000`)
 - [ ] Sysmon est installé et le service tourne (`Get-Service Sysmon64`)
-- [ ] Winlogbeat est installé et envoie des logs (`Get-Service winlogbeat`)
-- [ ] L'API reçoit des événements (logs `POST /_bulk` visibles dans Uvicorn)
-- [ ] La baseline est calibrée (message `Baseline calculée ! Le système passe en mode DÉTECTION`)
-- [ ] L'Agent PowerShell est lancé sur la VM (`.\agent_ps.ps1`)
+- [ ] Winlogbeat a le bon `hosts` + `password` (= `AGENT_TOKEN`) et tourne (`Get-Service winlogbeat`)
+- [ ] L'API reçoit des événements (logs `POST /_bulk` en 200, pas 401)
+- [ ] La baseline est calibrée (terminal en mode détection dans la console)
+- [ ] L'Agent PowerShell est lancé avec `EDR_API_URL` / `EDR_AGENT_TOKEN`
 - [ ] Le simulateur de ransomware est prêt (`simulate_ransomware_v2.ps1`)
 
 ---
@@ -224,8 +263,10 @@ Avant de lancer un test, vérifier que :
 | Problème | Cause probable | Solution |
 |----------|---------------|----------|
 | Winlogbeat ne démarre pas | Fichier `winlogbeat.yml` mal formaté (YAML sensible aux espaces) | Vérifier l'indentation avec un éditeur YAML |
-| `ping 192.168.10.2` échoue | Pare-feu Windows de l'hôte bloque les pings | Désactiver temporairement le pare-feu sur l'hôte |
-| L'API affiche `500 Internal Server Error` | Bug Python dans le pipeline | Lire le traceback complet dans le terminal Uvicorn |
-| L'Agent affiche des erreurs rouges | L'API n'est pas démarrée ou IP incorrecte | Vérifier que Uvicorn tourne et que l'IP est correcte dans `agent_ps.ps1` |
+| `ping <IP-HOTE>` échoue | Mauvaise IP (`.1` chez l'un, `.2` chez l'autre) ou pare-feu hôte | Relire `ipconfig` sur **votre** hôte ; autoriser le trafic VMnet1 |
+| Terminal « hors ligne », graphique à 0 | Winlogbeat n'atteint pas l'API (port / IP / token) | Publier le port 8000, corriger `hosts`, coller le bon `AGENT_TOKEN` dans `password`, `Restart-Service winlogbeat` |
+| `POST /_bulk` en **401** | `password` Winlogbeat ≠ `AGENT_TOKEN` du `.env` serveur | Recopier le token depuis l'hôte (`docker compose exec -T api printenv AGENT_TOKEN`) |
+| L'API affiche `500 Internal Server Error` | Bug Python dans le pipeline | Lire le traceback (`docker compose logs -f api`) |
+| L'Agent affiche des erreurs rouges | API arrêtée, mauvaise IP ou token manquant | Vérifier `EDR_API_URL` / `EDR_AGENT_TOKEN` et que le port 8000 répond |
 | Emojis cassent PowerShell | Encodage cp1252 de la console Windows | Utiliser uniquement des caractères ASCII dans les scripts .ps1 |
-| Le modèle ML ne se charge pas | Fichiers `.pkl` manquants dans `models/` | Exécuter `python scripts/train_model.py` pour régénérer les modèles |
+| Le modèle ML ne se charge pas | Fichiers `.pkl` manquants dans `models/` | Vérifier que `models/random_forest_model.pkl` et `scaler.pkl` sont présents (ou relancer `python -m scripts.train_model`) |
