@@ -1,4 +1,4 @@
-# Ransomware Detector — guide de reproduction
+# Ransomware Detector guide de reproduction
 
 Ce projet est une **console SOC** (centre opérationnel de sécurité) de laboratoire.
 Elle détecte des comportements de ransomware sur des postes Windows et permet aux
@@ -7,7 +7,7 @@ analystes de réagir depuis un navigateur.
 Vous n’avez **pas besoin de connaître le code**. Avec Docker, vous installez le serveur
 sur votre PC, vous ouvrez une page web, et vous vous connectez.
 
-**ECE Paris — Bachelor 3 Réseaux & Cybersécurité, FALL 2026**  
+**ECE Paris - Bachelor 3 Réseaux & Cybersécurité, FALL 2026**  
 Projet pédagogique. Les simulations sont inoffensives et doivent rester dans un lab isolé.
 
 ---
@@ -52,7 +52,7 @@ Jusqu’à l’étape 4, tout se fait **uniquement sur le PC hôte**. La VM est 
 
 Sur le **PC hôte** (votre ordinateur), installez et **laissez ouverts** :
 
-1. **Git** — [https://git-scm.com/download/win](https://git-scm.com/download/win)  
+1. **Git** - [https://git-scm.com/download/win](https://git-scm.com/download/win)  
    Cochez les options par défaut. Redémarrez PowerShell après l’installation.
 2. **Docker Desktop** — [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)  
    Après l’install, lancez **Docker Desktop** et attendez que l’icône baleine en bas à droite
